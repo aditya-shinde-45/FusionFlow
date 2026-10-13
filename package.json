@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "backend": "npm --prefix Backend start",
+    "backend:dev": "npm --prefix Backend run dev",
+    "backend:test": "npm --prefix Backend test",
+    "backend:verify": "npm --prefix Backend run verify:hcm"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

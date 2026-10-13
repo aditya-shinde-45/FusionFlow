@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import api from "./api/client";
 import {
   BrowserRouter,
   Navigate,
@@ -263,16 +264,26 @@ function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find((u) => u.username === username);
     if (user && password === "Demo@123") {
+      try {
+        await api.auth.login(username, password);
+      } catch (err: any) {
+        console.warn("Backend auth notice:", err.message);
+      }
       signIn(user);
       navigate("/home");
     }
     else setError("Enter a listed username and the demo password.");
   };
-  const signInAs = (user: User) => {
+  const signInAs = async (user: User) => {
+    try {
+      await api.auth.login(user.username, "Demo@123");
+    } catch (err: any) {
+      console.warn("Backend auth notice:", err.message);
+    }
     signIn(user);
     navigate("/home");
   };
@@ -751,8 +762,22 @@ function FormPage({ page }: { page: Page }) {
   const [more, setMore] = useState(false);
   const [dirty, setDirty] = useState(false);
   const readonly = user.username === "auditor";
-  const needsLines = !["/me/resignation", "/people/actions", "/suppliers/new"].includes(page.path);
-  const submit = () => { notify(`${page.title} submitted successfully`); setDirty(false); };
+  const submit = async () => {
+    try {
+      if (page.path === "/people/actions") {
+        await api.employees.performAction("EMP-1042", {
+          action: "PROMOTE",
+          effectiveDate: "2026-11-01",
+          reason: "Career progression",
+          proposedGrade: "G4",
+        });
+      }
+    } catch (e: any) {
+      console.warn("API action notice:", e.message);
+    }
+    notify(`${page.title} submitted successfully`);
+    setDirty(false);
+  };
   return <><PageTitle page={page} actions={<><Button onClick={() => dirty && !window.confirm("Discard unsaved changes?") ? null : navigate(-1)}>Cancel</Button><Button disabled={readonly} onClick={() => { notify("Draft saved"); setDirty(false); }}>Save</Button><Button variant="primary" disabled={readonly} title={readonly ? "Read-only role" : ""} onClick={submit}>Submit</Button></>} />
     <div className="form-page" onChange={() => setDirty(true)}>
       <StatusTrain current={0} />
@@ -815,10 +840,12 @@ function Worklist() {
     ["SUP-1098", "Supplier Registration SUP-1098", "Western Auto Forge", "Vikram Jadhav", "6 hours"],
     ["INV-8841", "Invoice Hold Release INV-8841", "₹ 2,12,600.00", "Nitin Gaikwad", "3 days"],
   ];
-  const act = (id: string, title: string, action: "Approved" | "Rejected" | "Information requested" | "Reassigned") => {
+  const act = async (id: string, title: string, action: "Approved" | "Rejected" | "Information requested" | "Reassigned") => {
+    let reason = "";
     if (action === "Rejected") {
-      const reason = window.prompt("Enter the rejection reason");
-      if (!reason?.trim()) return notify("A reason is required to reject");
+      const res = window.prompt("Enter the rejection reason");
+      if (!res?.trim()) return notify("A reason is required to reject");
+      reason = res;
     }
     if (action === "Reassigned") {
       const assignee = window.prompt("Reassign to");
@@ -827,6 +854,11 @@ function Worklist() {
     if (action === "Information requested") {
       const message = window.prompt("Enter the information required");
       if (!message?.trim()) return;
+    }
+    try {
+      await api.approvals.act(id, action, reason);
+    } catch (err: any) {
+      console.warn("Backend approval notice:", err.message);
     }
     updateWorkflow(id, action);
     notify(`${title}: ${action.toLowerCase()}`);
@@ -847,7 +879,16 @@ function OrgChart() {
 
 function Notifications() {
   const page = pages.find(p => p.path === "/notifications")!;
-  return <><PageTitle page={page} actions={<Button>Mark all as read</Button>} /><section className="notification-list">{Array.from({length:9},(_,i)=><article className={i<3?"unread":""} key={i}><span className="notification-icon">{i%2?<FileText size={18}/>:<ClipboardCheck size={18}/>}</span><div><strong>{i%2?"Approval required":"Transaction updated"}</strong><p>{i%2?"Requisition PR-2026-1184 is awaiting your approval.":"Work order WO-2026-0318 moved to operation completion."}</p><small>{15-i}-Oct-2026 · {String(9+i).padStart(2,"0")}:24</small></div>{i<3&&<i/>}</article>)}</section></>;
+  const notify = useAppStore(s => s.notify);
+  const markAll = async () => {
+    try {
+      await api.notifications.markAllRead();
+    } catch (err: any) {
+      console.warn("Notification notice:", err.message);
+    }
+    notify("All notifications marked as read");
+  };
+  return <><PageTitle page={page} actions={<Button onClick={markAll}>Mark all as read</Button>} /><section className="notification-list">{Array.from({length:9},(_,i)=><article className={i<3?"unread":""} key={i}><span className="notification-icon">{i%2?<FileText size={18}/>:<ClipboardCheck size={18}/>}</span><div><strong>{i%2?"Approval required":"Transaction updated"}</strong><p>{i%2?"Requisition PR-2026-1184 is awaiting your approval.":"Work order WO-2026-0318 moved to operation completion."}</p><small>{15-i}-Oct-2026 · {String(9+i).padStart(2,"0")}:24</small></div>{i<3&&<i/>}</article>)}</section></>;
 }
 
 function Reports() {
