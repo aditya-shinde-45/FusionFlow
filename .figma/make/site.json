@@ -1,0 +1,10 @@
+{
+  "description": "Enterprise cloud UI for manufacturing workflows enabling role-based management of HR, procurement, production, sales, and finance processes with real-time data.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
