@@ -232,13 +232,17 @@ export class EmployeeService {
 
     const buildTree = (manager) => {
       const reports = allEmployees.filter((e) => e.managerId === manager.id || e.managerName === manager.fullName);
+      const fn = manager.firstName || "";
+      const ln = manager.lastName || "";
+      const initials = (fn[0] || "") + (ln[0] || "") || manager.fullName?.slice(0, 2).toUpperCase() || "EM";
       return {
         id: manager.id,
         name: manager.fullName,
+        job: manager.job,
         role: manager.job,
         grade: manager.grade,
         department: manager.department,
-        initials: manager.firstName[0] + manager.lastName[0],
+        initials,
         children: reports.map(buildTree),
       };
     };

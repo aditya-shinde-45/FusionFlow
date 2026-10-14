@@ -13,6 +13,19 @@ import approvalRoutes from "./approvalRoutes.js";
 import notificationRoutes from "./notificationRoutes.js";
 import reportRoutes from "./reportRoutes.js";
 import adminRoutes from "./adminRoutes.js";
+import supplierRoutes from "./supplierRoutes.js";
+import { requisitionRouter, poRouter } from "./procurementRoutes.js";
+import receivingRoutes from "./receivingRoutes.js";
+import payablesRoutes from "./payablesRoutes.js";
+import { itemRouter, inventoryRouter } from "./inventoryRoutes.js";
+import mfgRoutes from "./mfgRoutes.js";
+import {
+  customerRouter,
+  priceListRouter,
+  orderRouter,
+  shippingRouter,
+  arRouter,
+} from "./orderRoutes.js";
 
 const apiRouter = Router();
 
@@ -38,5 +51,25 @@ apiRouter.use("/reports", reportRoutes);
 apiRouter.use("/admin", adminRoutes);
 apiRouter.use("/audit", adminRoutes);
 
+// Procure-to-Pay (P2P) Routes
+apiRouter.use("/suppliers", supplierRoutes);
+apiRouter.use("/requisitions", requisitionRouter);
+apiRouter.use("/po", poRouter);
+apiRouter.use("/receiving", receivingRoutes);
+apiRouter.use("/ap", payablesRoutes);
+
+// Plan-to-Produce (Manufacturing & Inventory)
+apiRouter.use("/items", itemRouter);
+apiRouter.use("/inventory", inventoryRouter);
+apiRouter.use("/mfg", mfgRoutes);
+
+// Order-to-Cash (O2C - Sales, Shipping, Receivables)
+apiRouter.use("/customers", customerRouter);
+apiRouter.use("/price-lists", priceListRouter);
+apiRouter.use("/orders", orderRouter);
+apiRouter.use("/shipping", shippingRouter);
+apiRouter.use("/ar", arRouter);
+
 export default apiRouter;
+
 

@@ -287,7 +287,10 @@ class ApiClient {
       return res.data;
     },
     calculate: async (periodCode: string, payGroup?: string) => {
-      const res = await requestPost("/payroll/runs/calculate", { periodCode, payGroup });
+      const res = await this.request<{ success: boolean; data: any }>("/payroll/runs/calculate", {
+        method: "POST",
+        body: JSON.stringify({ periodCode, payGroup }),
+      });
       return res.data;
     },
     submit: async (runId: string) => {
@@ -335,6 +338,10 @@ class ApiClient {
         method: "POST",
         body: JSON.stringify({ action, comment, ...details }),
       });
+      return res.data;
+    },
+    rules: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/approvals/rules");
       return res.data;
     },
   };
@@ -405,13 +412,394 @@ class ApiClient {
       return res.data;
     },
   };
-}
 
-async function requestPost(endpoint: string, body: any) {
-  return api.request(endpoint, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  // ==========================================
+  // Procure-to-Pay (P2P) APIs
+  // ==========================================
+
+  // Suppliers
+  suppliers = {
+    list: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/suppliers?${qs}`);
+      return res.data;
+    },
+    getById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/suppliers/${id}`);
+      return res.data;
+    },
+    create: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/suppliers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    update: async (id: string, updates: any) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/suppliers/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
+      });
+      return res.data;
+    },
+  };
+
+  // Purchase Requisitions
+  requisitions = {
+    list: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/requisitions?${qs}`);
+      return res.data;
+    },
+    getById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/requisitions/${id}`);
+      return res.data;
+    },
+    create: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/requisitions", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    approve: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/requisitions/${id}/approve`, {
+        method: "POST",
+      });
+      return res.data;
+    },
+    convertToPo: async (id: string, details: any = {}) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/requisitions/${id}/convert-to-po`, {
+        method: "POST",
+        body: JSON.stringify(details),
+      });
+      return res.data;
+    },
+  };
+
+  // Purchase Orders
+  po = {
+    list: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/po?${qs}`);
+      return res.data;
+    },
+    getById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/po/${id}`);
+      return res.data;
+    },
+    create: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/po", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+  };
+
+  // Receiving & Returns
+  receiving = {
+    listReceipts: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/receiving?${qs}`);
+      return res.data;
+    },
+    getReceiptById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/receiving/receipts/${id}`);
+      return res.data;
+    },
+    createReceipt: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/receiving", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    listReturns: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/receiving/returns?${qs}`);
+      return res.data;
+    },
+    createReturn: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/receiving/returns", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+  };
+
+  // Payables
+  ap = {
+    listInvoices: async (params: Record<string, string> = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/ap/invoices?${qs}`);
+      return res.data;
+    },
+    getInvoiceById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/ap/invoices/${id}`);
+      return res.data;
+    },
+    createInvoice: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/ap/invoices", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    listHolds: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/ap/holds");
+      return res.data;
+    },
+    releaseHold: async (id: string, reason: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/ap/holds/${id}/release`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      return res.data;
+    },
+    listPaymentBatches: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/ap/payments/batches");
+      return res.data;
+    },
+    createPaymentBatch: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/ap/payments/batches", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    processPaymentBatch: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/ap/payments/batches/${id}/process`, {
+        method: "POST",
+      });
+      return res.data;
+    },
+    exportBankBatch: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/ap/payments/batches/${id}/export-bank`);
+      return res.data;
+    },
+  };
+
+  // Plan-to-Produce: Items & Catalog
+  items = {
+    list: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/items?${qs}`);
+      return res.data;
+    },
+    getById: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/items/${id}`);
+      return res.data;
+    },
+    create: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/items", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+  };
+
+  // Plan-to-Produce: Inventory Balances & Movements
+  inventory = {
+    onhand: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: { records: any[]; summary: any } }>(`/inventory/onhand?${qs}`);
+      return res.data;
+    },
+    subinventories: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/inventory/subinventories");
+      return res.data;
+    },
+    transactions: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/inventory/transactions?${qs}`);
+      return res.data;
+    },
+    transfer: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/inventory/transfers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    miscellaneous: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/inventory/miscellaneous", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    cycleCounts: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/inventory/cycle-counts");
+      return res.data;
+    },
+    materialIssues: async (workOrderId?: string) => {
+      const qs = workOrderId ? `?workOrderId=${encodeURIComponent(workOrderId)}` : "";
+      const res = await this.request<{ success: boolean; data: any[] }>(`/inventory/material-issues${qs}`);
+      return res.data;
+    },
+    issueMaterial: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/inventory/material-issues/issue", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+  };
+
+  // Plan-to-Produce: Manufacturing Execution & Planning
+  mfg = {
+    boms: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/mfg/bom?${qs}`);
+      return res.data;
+    },
+    bomDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/bom/${id}`);
+      return res.data;
+    },
+    createBom: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/mfg/bom", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    routings: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/mfg/routings");
+      return res.data;
+    },
+    routingDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/routings/${id}`);
+      return res.data;
+    },
+    workCenters: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/mfg/work-centers");
+      return res.data;
+    },
+    workOrders: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/mfg/work-orders?${qs}`);
+      return res.data;
+    },
+    workOrderDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/work-orders/${id}`);
+      return res.data;
+    },
+    createWorkOrder: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/mfg/work-orders", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    releaseWorkOrder: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/work-orders/${id}/release`, {
+        method: "POST",
+      });
+      return res.data;
+    },
+    reportOperation: async (woId: string, seq: number, data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/work-orders/${woId}/operations/${seq}/progress`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    plannerRun: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/mfg/planner/run", {
+        method: "POST",
+      });
+      return res.data;
+    },
+    getPlans: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/mfg/planner");
+      return res.data;
+    },
+    firmPlan: async (planId: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/mfg/planner/${planId}/firm`, {
+        method: "POST",
+      });
+      return res.data;
+    },
+  };
+
+  // Order-to-Cash (O2C): Sales & Shipping
+  sales = {
+    customers: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/customers?${qs}`);
+      return res.data;
+    },
+    customerDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/customers/${id}`);
+      return res.data;
+    },
+    createCustomer: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/customers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    priceLists: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/price-lists");
+      return res.data;
+    },
+    orders: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/orders?${qs}`);
+      return res.data;
+    },
+    orderDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/orders/${id}`);
+      return res.data;
+    },
+    createOrder: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/orders", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    shipConfirm: async (soCode: string, data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/orders/${soCode}/ship-confirm`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+    deliveries: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/shipping");
+      return res.data;
+    },
+  };
+
+  // Order-to-Cash (O2C): Accounts Receivable & Receipts
+  ar = {
+    invoices: async (params: Record<string, string | number> = {}) => {
+      const qs = new URLSearchParams(params as any).toString();
+      const res = await this.request<{ success: boolean; data: any[] }>(`/ar/invoices?${qs}`);
+      return res.data;
+    },
+    invoiceDetail: async (id: string) => {
+      const res = await this.request<{ success: boolean; data: any }>(`/ar/invoices/${id}`);
+      return res.data;
+    },
+    receipts: async () => {
+      const res = await this.request<{ success: boolean; data: any[] }>("/ar/receipts");
+      return res.data;
+    },
+    createReceipt: async (data: any) => {
+      const res = await this.request<{ success: boolean; data: any }>("/ar/receipts", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return res.data;
+    },
+  };
 }
 
 export const api = new ApiClient();

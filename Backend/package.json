@@ -8,7 +8,12 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test tests/*.test.js",
-    "verify:hcm": "node scripts/verify-business-processes.js"
+    "verify:hcm": "node scripts/verify-business-processes.js",
+    "verify:p2p": "node scripts/verify-p2p.js",
+    "verify:mfg": "node scripts/verify-mfg.js",
+    "verify:o2c": "node scripts/verify-o2c.js",
+    "verify:personas": "node scripts/verify-all-personas-and-flows.js",
+    "verify:all": "node scripts/verify-business-processes.js && node scripts/verify-p2p.js && node scripts/verify-mfg.js && node scripts/verify-o2c.js && node scripts/verify-all-personas-and-flows.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

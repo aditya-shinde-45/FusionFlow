@@ -195,3 +195,129 @@ export const approvalActSchema = z.object({
   reassignedToRole: z.string().optional(),
   requestedInfoMessage: z.string().optional(),
 });
+
+// ==========================================
+// Procure-to-Pay (P2P) Schemas
+// ==========================================
+
+export const supplierCreateSchema = z.object({
+  name: z.string().min(2, "Supplier name required"),
+  taxId: z.string().min(5, "Valid Tax ID / GSTIN required"),
+  category: z.enum(["Direct Materials", "Indirect Materials", "Logistics", "Services"]).default("Direct Materials"),
+  primarySite: z.string().optional().default("PUNE-01"),
+  address: z.string().optional(),
+  city: z.string().optional().default("Pune"),
+  state: z.string().optional().default("Maharashtra"),
+  primaryContact: z.string().optional(),
+  email: z.string().email("Valid email required").optional(),
+  phone: z.string().optional(),
+  paymentTerms: z.string().optional().default("Net 30"),
+  bankName: z.string().optional(),
+  bankAccount: z.string().optional(),
+  bankIfsc: z.string().optional(),
+});
+
+export const supplierUpdateSchema = z.object({
+  name: z.string().optional(),
+  category: z.string().optional(),
+  primaryContact: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  status: z.enum(["Approved", "Pending approval", "On hold", "Inactive"]).optional(),
+});
+
+export const purchaseRequisitionCreateSchema = z.object({
+  title: z.string().min(3, "Title required"),
+  justification: z.string().optional(),
+  department: z.string().optional().default("Production"),
+  needByDate: z.string().optional(),
+  businessUnit: z.string().optional().default("Pune Manufacturing"),
+  lines: z.array(
+    z.object({
+      itemCode: z.string().min(1, "Item code required"),
+      description: z.string().min(1, "Description required"),
+      quantity: z.number().positive("Quantity must be positive"),
+      uom: z.string().default("EA"),
+      unitPrice: z.number().positive("Unit price must be positive"),
+      needByDate: z.string().optional(),
+      destination: z.string().optional().default("RM-STORES"),
+    })
+  ).min(1, "At least one requisition line is required"),
+});
+
+export const poCreateSchema = z.object({
+  supplierId: z.string().min(1, "Supplier ID required"),
+  supplierSite: z.string().optional().default("PUNE-01"),
+  requisitionId: z.string().optional(),
+  paymentTerms: z.string().optional().default("Net 30"),
+  businessUnit: z.string().optional().default("Pune Manufacturing"),
+  lines: z.array(
+    z.object({
+      itemCode: z.string().min(1, "Item code required"),
+      description: z.string().min(1, "Description required"),
+      orderedQty: z.number().positive("Ordered quantity must be positive"),
+      uom: z.string().default("EA"),
+      unitPrice: z.number().positive("Unit price must be positive"),
+      needByDate: z.string().optional(),
+    })
+  ).min(1, "At least one PO line is required"),
+});
+
+export const receivingCreateSchema = z.object({
+  poId: z.string().min(1, "PO reference required"),
+  packingSlip: z.string().optional().default("PS-AUTO"),
+  subinventory: z.string().optional().default("RM-STORES"),
+  lines: z.array(
+    z.object({
+      lineNum: z.number().int().default(1),
+      itemCode: z.string().min(1, "Item code required"),
+      description: z.string().optional(),
+      deliveredQty: z.number().nonnegative(),
+      acceptedQty: z.number().nonnegative(),
+      rejectedQty: z.number().nonnegative().default(0),
+      rejectionReason: z.string().nullable().optional(),
+      subinventory: z.string().optional().default("RM-STORES"),
+      rejectSubinventory: z.string().optional().default("QUALITY-HOLD"),
+    })
+  ).min(1, "At least one receipt line is required"),
+});
+
+export const returnCreateSchema = z.object({
+  receiptId: z.string().min(1, "Receipt reference required"),
+  itemCode: z.string().min(1, "Item code required"),
+  returnQty: z.number().positive("Return quantity must be positive"),
+  reason: z.string().min(3, "Return reason required"),
+  uom: z.string().optional().default("EA"),
+});
+
+export const invoiceCreateSchema = z.object({
+  supplierId: z.string().min(1, "Supplier reference required"),
+  supplierInvoiceNum: z.string().min(1, "Supplier invoice number required"),
+  poId: z.string().min(1, "Purchase order reference required"),
+  invoiceAmount: z.number().positive("Invoice amount must be positive"),
+  gstAmount: z.number().nonnegative().optional().default(0),
+  invoiceDate: z.string().optional(),
+  paymentTerms: z.string().optional().default("Net 30"),
+  lines: z.array(
+    z.object({
+      lineNum: z.number().int().default(1),
+      itemCode: z.string().min(1, "Item code required"),
+      description: z.string().optional(),
+      invoicedQty: z.number().positive("Invoiced quantity must be positive"),
+      unitPrice: z.number().positive("Unit price must be positive"),
+    })
+  ).optional(),
+});
+
+export const holdReleaseSchema = z.object({
+  reason: z.string().min(3, "Release reason required"),
+});
+
+export const paymentBatchCreateSchema = z.object({
+  bankAccount: z.string().min(1, "Bank account required"),
+  paymentMethod: z.enum(["NEFT", "RTGS", "Cheque"]).default("NEFT"),
+  paymentDate: z.string().optional(),
+  invoiceIds: z.array(z.string()).optional(),
+});
+

@@ -22,3 +22,27 @@ export function errorResponse(res, { message = "An error occurred", code = "INTE
   });
 }
 
+export class ApiError extends Error {
+  constructor(message, statusCode = 500, code = "API_ERROR", details = []) {
+    super(message);
+    this.name = "ApiError";
+    this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function sendSuccess(res, data, message = "Success", statusCode = 200) {
+  return successResponse(res, { data, message, statusCode });
+}
+
+export function sendCreated(res, data, message = "Created", statusCode = 201) {
+  return successResponse(res, { data, message, statusCode });
+}
+
+export function sendError(res, message, statusCode = 500, code = "ERROR") {
+  return errorResponse(res, { message, statusCode, code });
+}
+
+
+

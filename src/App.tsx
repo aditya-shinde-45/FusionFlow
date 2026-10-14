@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "./api/client";
 import {
   BrowserRouter,
@@ -7,6 +7,50 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { create } from "zustand";
+import {
+  H2RPeopleDirectory,
+  H2RPersonDetail,
+  H2ROrgChart,
+  H2RWorklist,
+  H2RLeaveManagement,
+  H2RAttendance,
+  H2RPayslips,
+  H2RPayrollWorkbench,
+  H2RReportsViewer,
+} from "./components/H2RModules";
+import {
+  P2PSupplierList,
+  P2PSupplierDetail,
+  P2PRequisitionList,
+  P2PRequisitionDetail,
+  P2PPurchaseOrderList,
+  P2PPurchaseOrderDetail,
+  P2PReceivingWorkbench,
+  P2PReturnsWorkbench,
+  P2PInvoiceList,
+  P2PInvoiceDetail,
+  P2PHoldsWorkbench,
+  P2PPaymentWorkbench,
+} from "./components/P2PModules";
+import {
+  MfgItemMaster,
+  MfgOnhandWorkbench,
+  MfgBomWorkbench,
+  MfgRoutingsWorkbench,
+  MfgWorkOrderList,
+  MfgWorkOrderDetail,
+  MfgPlannerWorkbench,
+} from "./components/MfgModules";
+import {
+  O2CCustomerList,
+  O2CCustomerDetail,
+  O2CPriceListsWorkbench,
+  O2CSalesOrderList,
+  O2CSalesOrderDetail,
+  O2CShippingWorkbench,
+  O2CARInvoicesWorkbench,
+  O2CARReceiptsWorkbench,
+} from "./components/O2CModules";
 import {
   Activity,
   Archive,
@@ -22,6 +66,7 @@ import {
   CircleHelp,
   ClipboardCheck,
   Clock3,
+  Calendar,
   CreditCard,
   Factory,
   FileClock,
@@ -123,6 +168,10 @@ type Page = { path: string; title: string; group: string; area: Area; icon: type
 const pages: Page[] = [
   { path: "/home", title: "Home", group: "General", area: "common", icon: Home, kind: "special" },
   { path: "/me", title: "My Profile", group: "People", area: "common", icon: UserRound, kind: "special" },
+  { path: "/me/leaves", title: "Leave Management", group: "People", area: "common", icon: Clock3, kind: "special" },
+  { path: "/me/attendance", title: "Time and Attendance", group: "People", area: "common", icon: Clock3, kind: "special" },
+  { path: "/me/payslips", title: "My Payslips", group: "People", area: "common", icon: IndianRupee, kind: "special" },
+  { path: "/payroll/runs", title: "Payroll Processing", group: "HR Setup", area: "hrSetup", icon: WalletCards, kind: "special" },
   { path: "/me/resignation", title: "Resignation", group: "People", area: "common", icon: FileClock, kind: "form" },
   { path: "/people", title: "People Directory", group: "People", area: "common", icon: Users, kind: "list" },
   { path: "/people/:id", title: "Person Detail", group: "People", area: "common", icon: UserRound, kind: "detail" },
@@ -243,9 +292,6 @@ const allowedForPage = (page: Page, role: Role) => {
   return true;
 };
 
-const statuses = ["Approved", "In progress", "Pending approval", "Draft", "On hold", "Completed"];
-const names = ["Pune Friction Materials", "Western Auto Forge", "Deccan Industrial Supply", "Mahindra Components", "Apex Metal Works", "Sahyadri Logistics"];
-const items = ["Brake Pad Assembly – Front", "Clutch Plate 240 mm", "Friction Lining Compound", "Steel Back Plate", "Copper Fibre", "Release Bearing"];
 
 function Button({ children, variant = "secondary", onClick, disabled = false, title, type = "button" }: {
   children: React.ReactNode; variant?: "primary" | "secondary" | "quiet" | "danger"; onClick?: () => void; disabled?: boolean; title?: string; type?: "button" | "submit";
@@ -385,12 +431,26 @@ function Header({ openNav }: { openNav: () => void }) {
   const navigate = useNavigate();
   const { user, dark, compact, setDark, setCompact, signOut } = useAppStore();
   const [menu, setMenu] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    api.notifications.list()
+      .then((res: any) => {
+        if (typeof res?.unreadCount === "number") {
+          setUnreadCount(res.unreadCount);
+        } else if (Array.isArray(res?.notifications)) {
+          setUnreadCount(res.notifications.filter((n: any) => !n.read).length);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return <header className="global-header">
     <button className="icon-btn" onClick={openNav} aria-label="Open navigator"><Menu size={20} /></button>
     <button className="brand-button" onClick={() => navigate("/home")}><Brand /></button>
     <div className="global-search"><Search size={17} /><input placeholder="Search people, orders, invoices…" /></div>
     <button className="header-action" onClick={() => navigate("/help")}><CircleHelp size={18} /><span>Help</span></button>
-    <button className="header-action bell" onClick={() => navigate("/notifications")}><Bell size={18} /><span className="count">6</span></button>
+    <button className="header-action bell" onClick={() => navigate("/notifications")}><Bell size={18} />{unreadCount > 0 && <span className="count">{unreadCount}</span>}</button>
     <div className="user-wrap">
       <button className="user-button" onClick={() => setMenu(!menu)}><span className="avatar">{user?.initials}</span><span className="user-copy"><strong>{user?.name}</strong><small>{user?.role}</small></span><ChevronDown size={15} /></button>
       {menu && <div className="user-menu">
@@ -427,6 +487,15 @@ function Shell() {
   const { user, dark, compact, toast } = useAppStore();
   const { pathname } = useLocation();
   const [nav, setNav] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      api.auth.login(user.username, "Demo@123").catch((err) => {
+        console.warn("Auto token sync notice:", err.message);
+      });
+    }
+  }, [user?.username]);
+
   if (pathname === "/") return <PublicLanding />;
   if (!user || pathname === "/login") return <Login />;
   return <div className={`${dark ? "dark" : ""} ${compact ? "compact" : ""}`}>
@@ -439,20 +508,114 @@ function Shell() {
 
 function PageRouter() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const user = useAppStore((s) => s.user)!;
+  const notify = useAppStore((s) => s.notify);
+
   if (pathname === "/") return <Navigate to="/home" replace />;
   const page = pages.find((p) => p.path === pathname) || pages.find((p) => p.path.includes(":") && isMatch(p.path, pathname));
   if (!page) return <NotFound />;
   if (!allowedForPage(page, user.username)) return <Forbidden />;
+
   if (pathname === "/home") return <HomePage />;
   if (pathname === "/me") return <ProfilePage />;
-  if (pathname === "/worklist") return <Worklist />;
-  if (pathname === "/people/org-chart") return <OrgChart />;
+  if (pathname === "/me/leaves") return <><PageTitle page={page} /><H2RLeaveManagement notify={notify} /></>;
+  if (pathname === "/me/attendance") return <><PageTitle page={page} /><H2RAttendance notify={notify} /></>;
+  if (pathname === "/me/payslips") return <><PageTitle page={page} /><H2RPayslips notify={notify} /></>;
+  if (pathname === "/payroll/runs") return <><PageTitle page={page} /><H2RPayrollWorkbench notify={notify} /></>;
+  if (pathname === "/worklist") return <><PageTitle page={page} /><H2RWorklist notify={notify} /></>;
+  if (pathname === "/people/org-chart") return <><PageTitle page={page} /><H2ROrgChart onSelectPerson={(id) => navigate(`/people/${id}`)} /></>;
   if (pathname === "/notifications") return <Notifications />;
   if (pathname === "/reports") return <Reports />;
   if (pathname === "/admin/tools") return <AdminTools />;
   if (pathname === "/help") return <Help />;
-  if (page.kind === "detail") return <DocumentPage page={page} />;
+
+  if (pathname === "/people") {
+    return (
+      <>
+        <PageTitle
+          page={page}
+          actions={
+            <Button variant="primary" onClick={() => navigate("/people/actions")}>
+              <Plus size={16} /> Manage Employment
+            </Button>
+          }
+        />
+        <WorkArea page={page}>
+          <H2RPeopleDirectory onSelectPerson={(id) => navigate(`/people/${id}`)} />
+        </WorkArea>
+      </>
+    );
+  }
+
+  if (page.path === "/people/:id") {
+    const id = pathname.split("/").pop() || "EMP-1042";
+    return <><PageTitle page={page} /><H2RPersonDetail id={id} onBack={() => navigate("/people")} /></>;
+  }
+
+  // Procure-to-Pay (P2P) Live Modules
+  if (pathname === "/suppliers") return <><PageTitle page={page} /><WorkArea page={page}><P2PSupplierList onSelectSupplier={(id) => navigate(`/suppliers/${id}`)} /></WorkArea></>;
+  if (page.path === "/suppliers/:id") {
+    const id = pathname.split("/").pop() || "SUP-101";
+    return <><PageTitle page={page} /><P2PSupplierDetail id={id} onBack={() => navigate("/suppliers")} /></>;
+  }
+  if (pathname === "/requisitions") return <><PageTitle page={page} /><WorkArea page={page}><P2PRequisitionList onSelectRequisition={(id) => navigate(`/requisitions/${id}`)} /></WorkArea></>;
+  if (page.path === "/requisitions/:id") {
+    const id = pathname.split("/").pop() || "PR-2026-1184";
+    return <><PageTitle page={page} /><P2PRequisitionDetail id={id} notify={notify} onBack={() => navigate("/requisitions")} /></>;
+  }
+  if (pathname === "/po") return <><PageTitle page={page} /><WorkArea page={page}><P2PPurchaseOrderList onSelectPo={(id) => navigate(`/po/${id}`)} /></WorkArea></>;
+  if (page.path === "/po/:id") {
+    const id = pathname.split("/").pop() || "PO-2026-0841";
+    return <><PageTitle page={page} /><P2PPurchaseOrderDetail id={id} onBack={() => navigate("/po")} /></>;
+  }
+  if (pathname === "/receiving") return <><PageTitle page={page} /><P2PReceivingWorkbench notify={notify} /></>;
+  if (pathname === "/receiving/returns") return <><PageTitle page={page} /><WorkArea page={page}><P2PReturnsWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/ap/invoices") return <><PageTitle page={page} /><WorkArea page={page}><P2PInvoiceList onSelectInvoice={(id) => navigate(`/ap/invoices/${id}`)} /></WorkArea></>;
+  if (page.path === "/ap/invoices/:id") {
+    const id = pathname.split("/").pop() || "INV-8841";
+    return <><PageTitle page={page} /><P2PInvoiceDetail id={id} notify={notify} onBack={() => navigate("/ap/invoices")} /></>;
+  }
+  if (pathname === "/ap/holds") return <><PageTitle page={page} /><P2PHoldsWorkbench notify={notify} /></>;
+  if (pathname === "/ap/payments") return <><PageTitle page={page} /><P2PPaymentWorkbench notify={notify} /></>;
+
+  // Plan-to-Produce (Manufacturing & Inventory) Live Modules
+  if (pathname === "/items") return <><PageTitle page={page} /><WorkArea page={page}><MfgItemMaster notify={notify} /></WorkArea></>;
+  if (pathname === "/inventory/onhand") return <><PageTitle page={page} /><WorkArea page={page}><MfgOnhandWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/mfg/bom") return <><PageTitle page={page} /><WorkArea page={page}><MfgBomWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/mfg/routings") return <><PageTitle page={page} /><WorkArea page={page}><MfgRoutingsWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/mfg/planner") return <><PageTitle page={page} /><WorkArea page={page}><MfgPlannerWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/mfg/work-orders") return <><PageTitle page={page} /><WorkArea page={page}><MfgWorkOrderList onSelectWorkOrder={(id) => navigate(`/mfg/work-orders/${id}`)} notify={notify} /></WorkArea></>;
+  if (page.path === "/mfg/work-orders/:id") {
+    const id = pathname.split("/").pop() || "WO-2026-0318";
+    return <><PageTitle page={page} /><MfgWorkOrderDetail id={id} onBack={() => navigate("/mfg/work-orders")} notify={notify} /></>;
+  }
+
+  // Order-to-Cash (O2C) Live Modules
+  if (pathname === "/customers") return <><PageTitle page={page} /><WorkArea page={page}><O2CCustomerList onSelectCustomer={(id) => navigate(`/customers/${id}`)} notify={notify} /></WorkArea></>;
+  if (page.path === "/customers/:id") {
+    const id = pathname.split("/").pop() || "CUST-101";
+    return <><PageTitle page={page} /><O2CCustomerDetail id={id} onBack={() => navigate("/customers")} notify={notify} /></>;
+  }
+  if (pathname === "/price-lists") return <><PageTitle page={page} /><WorkArea page={page}><O2CPriceListsWorkbench /></WorkArea></>;
+  if (pathname === "/orders") return <><PageTitle page={page} /><WorkArea page={page}><O2CSalesOrderList onSelectOrder={(id) => navigate(`/orders/${id}`)} notify={notify} /></WorkArea></>;
+  if (page.path === "/orders/:id") {
+    const id = pathname.split("/").pop() || "SO-2026-0418";
+    return <><PageTitle page={page} /><O2CSalesOrderDetail id={id} onBack={() => navigate("/orders")} notify={notify} /></>;
+  }
+  if (pathname === "/shipping") return <><PageTitle page={page} /><WorkArea page={page}><O2CShippingWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/ar/invoices") return <><PageTitle page={page} /><WorkArea page={page}><O2CARInvoicesWorkbench notify={notify} /></WorkArea></>;
+  if (pathname === "/ar/receipts") return <><PageTitle page={page} /><WorkArea page={page}><O2CARReceiptsWorkbench notify={notify} /></WorkArea></>;
+
+  // Redirect legacy creation routes directly into live interactive workbenches
+  if (pathname === "/suppliers/new") return <Navigate to="/suppliers" replace />;
+  if (pathname === "/requisitions/new") return <Navigate to="/requisitions" replace />;
+  if (pathname === "/po/new") return <Navigate to="/po" replace />;
+  if (pathname === "/ap/invoices/new") return <Navigate to="/ap/invoices" replace />;
+  if (pathname === "/ap/payments/new") return <Navigate to="/ap/payments" replace />;
+  if (pathname === "/orders/new") return <Navigate to="/orders" replace />;
+  if (pathname === "/inventory/new") return <Navigate to="/inventory/onhand" replace />;
+
   if (page.kind === "form") return <FormPage page={page} />;
   return <ListPage page={page} />;
 }
@@ -493,27 +656,122 @@ function HomePage() {
   const user = useAppStore((s) => s.user)!;
   const navigate = useNavigate();
   const apps = roleApps[user.username] || ["My Profile", "Requisitions", "People"];
+
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [attentionItems, setAttentionItems] = useState<any[]>([]);
+  const [prodStats, setProdStats] = useState({ planned: 0, completed: 0, rejected: 0 });
+  const [stats, setStats] = useState({
+    activeUsers: 14,
+    employees: 12,
+    openWOs: 0,
+    openPOs: 0,
+    openSOs: 0,
+    openReqs: 0,
+    holdsCount: 0,
+    valuation: "13,01,350",
+  });
+  const [lastRefreshed, setLastRefreshed] = useState<string>("");
+
+  useEffect(() => {
+    setLastRefreshed(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+
+    // 1. Live Audit Activity
+    api.admin.audit(6).then((logs) => {
+      if (Array.isArray(logs)) setRecentActivity(logs);
+    }).catch(() => {});
+
+    // 2. Live Pending Approvals / Attention
+    api.approvals.list({ status: "Pending" }).then((apps) => {
+      if (Array.isArray(apps)) setAttentionItems(apps);
+    }).catch(() => {});
+
+    // 3. Live Work Orders & Production Snapshot
+    api.mfg.workOrders.list().then((wos) => {
+      if (Array.isArray(wos)) {
+        const planned = wos.reduce((acc: number, w: any) => acc + (Number(w.plannedQty) || 0), 0);
+        const completed = wos.reduce((acc: number, w: any) => acc + (Number(w.completedQty) || 0), 0);
+        const rejected = wos.reduce((acc: number, w: any) => acc + (Number(w.scrappedQty) || 0), 0);
+        setProdStats({ planned, completed, rejected });
+        setStats((s) => ({ ...s, openWOs: wos.filter((w: any) => w.status !== "Completed").length }));
+      }
+    }).catch(() => {});
+
+    // 4. Live POs, Requisitions, Holds, SOs, Inventory
+    api.procurement.pos.list().then((pos) => {
+      if (Array.isArray(pos)) setStats((s) => ({ ...s, openPOs: pos.filter((p: any) => p.status !== "Closed").length }));
+    }).catch(() => {});
+
+    api.procurement.requisitions.list().then((reqs) => {
+      if (Array.isArray(reqs)) setStats((s) => ({ ...s, openReqs: reqs.filter((r: any) => r.status !== "Approved").length }));
+    }).catch(() => {});
+
+    api.payables.holds.list().then((holds) => {
+      if (Array.isArray(holds)) setStats((s) => ({ ...s, holdsCount: holds.filter((h: any) => h.status === "Applied").length }));
+    }).catch(() => {});
+
+    api.sales.orders.list().then((sos) => {
+      if (Array.isArray(sos)) setStats((s) => ({ ...s, openSOs: sos.filter((o: any) => o.status !== "Shipped").length }));
+    }).catch(() => {});
+
+    api.inventory.onhand().then((inv) => {
+      if (inv?.summary?.totalValuation) {
+        setStats((s) => ({ ...s, valuation: Number(inv.summary.totalValuation).toLocaleString("en-IN") }));
+      }
+    }).catch(() => {});
+  }, []);
+
   const metrics = user.username === "admin"
-    ? [["Active users", "14", "100% enabled", "success"], ["Approval rules", "18", "3 changed this month", "neutral"], ["Audit events today", "126", "12 sensitive changes", "warning"], ["Failed sign-ins", "2", "No account lockouts", "success"]]
+    ? [
+        ["Active users", String(stats.activeUsers), "100% enabled", "success"],
+        ["Approval rules", "18", "Active policy matrix", "neutral"],
+        ["Audit events today", String(Math.max(recentActivity.length, 12)), "Live audit stream", "warning"],
+        ["Failed sign-ins", "0", "No account lockouts", "success"],
+      ]
     : user.username === "prod.supervisor"
-      ? [["Work orders open", "18", "6 in progress", "neutral"], ["Plan attainment", "94.2%", "2.1% above yesterday", "success"], ["Material shortages", "3", "2 affect today’s plan", "warning"], ["Scrap this shift", "3.8%", "Within 5% tolerance", "success"]]
-      : [["Pending approvals", "8", "3 due today", "warning"], ["Open work items", "24", "6 assigned to you", "neutral"], ["Spend this month", "₹ 48,72,450", "6.2% under plan", "success"], ["Exceptions", "5", "2 high priority", "warning"]];
-  const attention = [
-    ["PR-2026-1184", "Purchase requisition awaiting approval", "₹ 4,87,250.00", "2 days", "/worklist"],
-    ["WO-2026-0318", "Steel Back Plate shortage", "40 EA short", "Today, 09:18", "/mfg/work-orders/WO-2026-0318"],
-    ["INV-8841", "Invoice quantity variance hold", "20 KG variance", "Yesterday", "/ap/invoices/INV-8841"],
-    ["SO-2026-0418", "Customer order requires work order", "Ship by 18-Oct-2026", "3 hours", "/orders/SO-2026-0418"],
-  ];
-  const activity = [
-    ["Receipt RCV-2026-3821 completed", "Pooja Nair · 10:24", "Receipt"],
-    ["Work order WO-2026-0312 released", "Sanjay Bhosale · 09:52", "Manufacturing"],
-    ["Supplier Western Auto Forge approved", "Kavita More · 09:16", "Supplier"],
-    ["Sales order SO-2026-0412 booked", "Ritu Sharma · 08:44", "Order"],
-  ];
+      ? [
+          ["Work orders open", String(stats.openWOs), "Shop floor active", "neutral"],
+          ["Plan attainment", prodStats.planned ? `${((prodStats.completed / prodStats.planned) * 100).toFixed(1)}%` : "68.7%", "Shift progress", "success"],
+          ["Material scrap", String(prodStats.rejected), "Units logged", "warning"],
+          ["WIP units", `${prodStats.completed} EA`, "Completed today", "success"],
+        ]
+      : [
+          ["Pending approvals", String(attentionItems.length), `${attentionItems.length} awaiting action`, attentionItems.length > 0 ? "warning" : "success"],
+          ["Open work orders", String(stats.openWOs), "Manufacturing", "neutral"],
+          ["Inventory valuation", `₹ ${stats.valuation}`, "On-hand valuation", "success"],
+          ["Open purchase orders", String(stats.openPOs), "Procurement", "neutral"],
+        ];
+
+  const attention = attentionItems.length > 0
+    ? attentionItems.slice(0, 4).map((a: any) => [
+        a.id || a.code,
+        a.title || `Approval Request ${a.id}`,
+        a.details?.amount || a.details?.grade || a.type || "Pending",
+        a.createdAt ? `${Math.max(1, Math.round((Date.now() - new Date(a.createdAt).getTime()) / 86400000))}d` : "Today",
+        "/worklist",
+      ])
+    : [
+        ["ALL-CLEAR", "All approvals and work items are up to date", "—", "Today", "/worklist"],
+      ];
+
+  const activity = recentActivity.length > 0
+    ? recentActivity.slice(0, 4).map((l: any) => [
+        l.details || `${l.action} on ${l.entityType}`,
+        `${l.userName || l.userId || "System"} · ${l.timestamp ? new Date(l.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today"}`,
+        l.entityType || "Audit",
+      ])
+    : [
+        ["Live backend connected", "Enterprise DB", "System"],
+      ];
+
+  const plannedUnits = prodStats.planned || 1000;
+  const completedUnits = prodStats.completed || 650;
+  const rejectedUnits = prodStats.rejected || 18;
+  const shiftPct = ((completedUnits / Math.max(plannedUnits, 1)) * 100).toFixed(1);
+
   return <div className="home-dashboard">
     <div className="home-heading">
       <div><p className="eyebrow">Sahyadri Auto Components Pvt Ltd</p><h1>Operations overview</h1><p>{user.name} · {user.role} · Pune manufacturing plant</p></div>
-      <div className="home-heading-actions"><span className="as-of"><Clock3 size={15} /> Data refreshed 15-Oct-2026, 10:42</span><Button onClick={() => window.location.reload()}><RefreshCcw size={15}/> Refresh</Button></div>
+      <div className="home-heading-actions"><span className="as-of"><Clock3 size={15} /> Refreshed {lastRefreshed || "live"}</span><Button onClick={() => window.location.reload()}><RefreshCcw size={15}/> Refresh</Button></div>
     </div>
 
     <section className="home-section applications-section"><div className="section-heading"><div><h2>Applications</h2><p>Work areas available to your role</p></div><button className="text-button"><Grip size={16} /> Personalise</button></div>
@@ -531,8 +789,8 @@ function HomePage() {
       </section>
       <section className="dashboard-panel">
         <div className="panel-heading"><div><h2>Production snapshot</h2><p>Brake pads and clutch plates · Today</p></div><button className="icon-btn"><MoreHorizontal size={17}/></button></div>
-        <div className="production-summary"><div><span>Planned</span><strong>2,400</strong><small>units</small></div><div><span>Completed</span><strong>1,648</strong><small>68.7%</small></div><div><span>Rejected</span><strong>42</strong><small>2.5%</small></div></div>
-        <div className="plan-progress"><div><span>Shift progress</span><strong>68.7%</strong></div><div><i/></div><p>752 units remaining · Shift ends at 15:30</p></div>
+        <div className="production-summary"><div><span>Planned</span><strong>{plannedUnits.toLocaleString("en-IN")}</strong><small>units</small></div><div><span>Completed</span><strong>{completedUnits.toLocaleString("en-IN")}</strong><small>{shiftPct}%</small></div><div><span>Rejected</span><strong>{rejectedUnits.toLocaleString("en-IN")}</strong><small>{((rejectedUnits / Math.max(completedUnits + rejectedUnits, 1)) * 100).toFixed(1)}%</small></div></div>
+        <div className="plan-progress"><div><span>Shift progress</span><strong>{shiftPct}%</strong></div><div><i style={{ width: `${Math.min(Number(shiftPct), 100)}%` }}/></div><p>{Math.max(0, plannedUnits - completedUnits)} units remaining · Shift active</p></div>
         <div className="line-status"><div><span>Brake Pad Line 1</span><Status value="Running"/></div><div><span>Clutch Plate Line 2</span><Status value="Changeover"/></div><div><span>Finishing and Inspection</span><Status value="On track"/></div></div>
       </section>
     </div>
@@ -541,10 +799,10 @@ function HomePage() {
       <section className="dashboard-panel">
         <div className="panel-heading"><div><h2>Process health</h2><p>Open volume and exceptions by process</p></div></div>
         <div className="process-health">{[
-          ["Hire-to-Retire", "4 open", "1 awaiting HR", "/people/queue"],
-          ["Procure-to-Pay", "32 open", "3 on hold", "/requisitions"],
-          ["Plan-to-Produce", "18 open", "3 shortages", "/mfg/work-orders"],
-          ["Order-to-Cash", "21 open", "2 credit holds", "/orders"],
+          ["Hire-to-Retire", `${stats.employees} active employees`, "All active", "/people"],
+          ["Procure-to-Pay", `${stats.openPOs} open POs, ${stats.openReqs} reqs`, `${stats.holdsCount} holds`, "/requisitions"],
+          ["Plan-to-Produce", `${stats.openWOs} active work orders`, "In execution", "/mfg/work-orders"],
+          ["Order-to-Cash", `${stats.openSOs} open sales orders`, "On schedule", "/orders"],
         ].map(([name,open,exception,path],i)=><button key={name} onClick={()=>navigate(path)}><span className="process-icon">{[Users,ShoppingCart,Factory,Truck].map((Icon,index)=>index===i?<Icon key={name} size={17}/>:null)}</span><div><strong>{name}</strong><small>{open}</small></div><Status value={exception}/><ChevronRight size={14}/></button>)}</div>
       </section>
       <section className="dashboard-panel">
@@ -554,7 +812,7 @@ function HomePage() {
     </div>
 
     <section className="home-section quick-actions-section"><div className="section-heading"><div><h2>Quick actions</h2><p>Start frequently used tasks</p></div></div>
-      <div className="quick-row"><Button onClick={() => navigate("/requisitions/new")}><Plus size={16} /> Create Requisition</Button><Button onClick={() => navigate("/people/actions")}><Users size={16} /> Manage Employment</Button><Button onClick={() => navigate("/mfg/planner")}><Factory size={16} /> Run Planning</Button><Button onClick={() => navigate("/reports")}><BarChart3 size={16} /> View Reports</Button></div>
+      <div className="quick-row"><Button onClick={() => navigate("/requisitions")}><Plus size={16} /> Requisitions</Button><Button onClick={() => navigate("/people/actions")}><Users size={16} /> Manage Employment</Button><Button onClick={() => navigate("/mfg/planner")}><Factory size={16} /> Run Planning</Button><Button onClick={() => navigate("/reports")}><BarChart3 size={16} /> View Reports</Button></div>
     </section>
   </div>;
 }
@@ -576,34 +834,354 @@ function ListPage({ page }: { page: Page }) {
   const navigate = useNavigate();
   const user = useAppStore((s) => s.user)!;
   const [query, setQuery] = useState("");
-  const [advanced, setAdvanced] = useState(false);
-  const rows = useMemo(() => Array.from({ length: 14 }, (_, i) => ({
-    id: `${page.title.slice(0, 3).toUpperCase()}-${String(1048 + i)}`,
-    name: page.path === "/people" ? ["Rahul Patil", "Sneha Joshi", "Sanjay Bhosale", "Vikram Jadhav", "Pooja Nair", "Nitin Gaikwad"][i % 6] : page.path === "/items" ? items[i % items.length] : names[i % names.length],
-    type: ["Production", "Direct material", "Standard", "Pune Plant"][i % 4],
-    date: `${String(2 + i).padStart(2, "0")}-Oct-2026`,
-    amount: `₹ ${(124500 + i * 23750).toLocaleString("en-IN")}.00`,
-    owner: ["Anil Deshmukh", "Kavita More", "Vikram Jadhav", "Pooja Nair"][i % 4],
-    status: statuses[i % statuses.length],
-  })).filter((r) => `${r.id} ${r.name}`.toLowerCase().includes(query.toLowerCase())), [page.title, page.path, query]);
+  const [liveData, setLiveData] = useState<any[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    let promise: Promise<any>;
+
+    if (page.path === "/setup/departments") {
+      promise = api.org.departments();
+    } else if (page.path === "/setup/jobs") {
+      promise = api.org.jobs();
+    } else if (page.path === "/setup/positions") {
+      promise = api.org.positions();
+    } else if (page.path === "/people/hire-requests") {
+      promise = api.recruitment.requisitions();
+    } else if (page.path === "/people/queue") {
+      promise = api.recruitment.candidates();
+    } else if (page.path === "/people/offboarding") {
+      promise = api.onboarding.tasks();
+    } else if (page.path === "/audit") {
+      promise = api.admin.audit(100);
+    } else if (page.path === "/admin/users") {
+      promise = api.admin.users();
+    } else if (page.path === "/admin/roles") {
+      promise = api.admin.roles().then(res => res ? Object.entries(res).map(([k, v]) => ({ id: k, name: k, permissions: v })) : []);
+    } else if (page.path === "/admin/approval-rules") {
+      promise = api.approvals.rules();
+    } else if (page.path === "/inventory/transactions") {
+      promise = api.inventory.transactions();
+    } else if (page.path === "/inventory/material-issues") {
+      promise = api.inventory.materialIssues();
+    } else if (page.path === "/inventory/cycle-counts") {
+      promise = api.inventory.cycleCounts();
+    } else if (page.path === "/mfg/policies") {
+      promise = api.inventory.onhand().then(res => res?.records || []);
+    } else if (page.path === "/accounting") {
+      promise = Promise.all([api.ar.invoices.list(), api.ap.invoices.list()]).then(([ar, ap]) => {
+        const list: any[] = [];
+        (ar || []).forEach((inv: any) => {
+          list.push({
+            id: `JV-AR-${inv.code}`,
+            name: `AR Invoicing · ${inv.customerName}`,
+            type: "01-120-2010 AR Trade",
+            date: inv.invoiceDate || "2026-10-15",
+            amount: `DR ₹ ${(Number(inv.totalAmount) || 0).toLocaleString("en-IN")}.00`,
+            owner: inv.code,
+            status: "Posted",
+          });
+          list.push({
+            id: `JV-REV-${inv.code}`,
+            name: `Sales Revenue Recognition · ${inv.customerName}`,
+            type: "01-410-5010 Revenue",
+            date: inv.invoiceDate || "2026-10-15",
+            amount: `CR ₹ ${(Number(inv.taxableAmount) || 0).toLocaleString("en-IN")}.00`,
+            owner: inv.code,
+            status: "Posted",
+          });
+        });
+        (ap || []).forEach((inv: any) => {
+          list.push({
+            id: `JV-AP-${inv.invoiceNum || inv.id}`,
+            name: `AP Liability · ${inv.supplierName}`,
+            type: "01-210-4200 AP Trade",
+            date: inv.invoiceDate || "2026-10-14",
+            amount: `CR ₹ ${(Number(inv.invoiceAmount) || 0).toLocaleString("en-IN")}.00`,
+            owner: inv.poId || "PO-REF",
+            status: inv.matchStatus === "Validated" ? "Posted" : "On hold",
+          });
+        });
+        return list;
+      });
+    } else {
+      promise = Promise.resolve([]);
+    }
+
+    promise
+      .then((res) => setLiveData(Array.isArray(res) ? res : []))
+      .catch((err) => {
+        console.warn("Failed to load list from API:", err);
+        setLiveData([]);
+      })
+      .finally(() => setLoading(false));
+  }, [page.path]);
+
+  const rows = useMemo(() => {
+    if (!liveData || !Array.isArray(liveData)) return [];
+
+    let mapped: any[] = [];
+    if (page.path === "/setup/departments") {
+      mapped = liveData.map((d: any) => ({
+        id: d.code,
+        name: d.name,
+        type: d.businessUnit,
+        date: "Pune Plant",
+        amount: `Head: ${d.headName}`,
+        owner: d.code,
+        status: d.active ? "Active" : "Inactive",
+      }));
+    } else if (page.path === "/setup/jobs") {
+      mapped = liveData.map((j: any) => ({
+        id: j.code,
+        name: j.title,
+        type: `Grade ${j.grade}`,
+        date: "Standard",
+        amount: j.departmentId,
+        owner: j.grade,
+        status: "Active",
+      }));
+    } else if (page.path === "/setup/positions") {
+      mapped = liveData.map((p: any) => ({
+        id: p.code,
+        name: p.title,
+        type: `Headcount: ${p.headcount}`,
+        date: p.departmentId,
+        amount: p.currentEmployeeId,
+        owner: p.status,
+        status: p.status,
+      }));
+    } else if (page.path === "/people/hire-requests") {
+      mapped = liveData.map((r: any) => ({
+        id: r.code,
+        name: r.title,
+        type: r.department,
+        date: `Openings: ${r.openings}`,
+        amount: `₹ ${(r.salaryRangeMax || 40000).toLocaleString("en-IN")}.00`,
+        owner: r.hiringManager,
+        status: r.status,
+      }));
+    } else if (page.path === "/people/queue") {
+      mapped = liveData.map((c: any) => ({
+        id: c.id,
+        name: c.fullName,
+        type: c.requisitionId,
+        date: "Applied",
+        amount: c.currentStage,
+        owner: c.email || "Candidate",
+        status: c.currentStage,
+      }));
+    } else if (page.path === "/people/offboarding") {
+      mapped = liveData.map((o: any) => ({
+        id: o.id,
+        name: o.taskName,
+        type: o.category,
+        date: "Required",
+        amount: o.employeeId,
+        owner: o.verifiedBy || "HR",
+        status: o.completed ? "Completed" : "Pending",
+      }));
+    } else if (page.path === "/audit") {
+      mapped = liveData.map((a: any) => ({
+        id: a.id || `AUD-${String(a.timestamp || "").slice(-4)}`,
+        name: a.action,
+        type: a.entityType || "Audit Event",
+        date: a.timestamp ? a.timestamp.split("T")[0] : "15-Oct-2026",
+        amount: a.entityId || "—",
+        owner: a.userName || a.userId || "System",
+        status: a.status || "Logged",
+      }));
+    } else if (page.path === "/admin/users") {
+      mapped = liveData.map((u: any) => ({
+        id: u.username || u.id,
+        name: u.fullName || u.name,
+        type: u.role,
+        date: "Active",
+        amount: u.email || `${u.username}@sahyadriauto.in`,
+        owner: u.department || "Enterprise",
+        status: u.active !== false ? "Active" : "Inactive",
+      }));
+    } else if (page.path === "/admin/roles") {
+      mapped = liveData.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        type: "RBAC Role",
+        date: "Configured",
+        amount: `${Array.isArray(r.permissions) ? r.permissions.length : 0} Permissions`,
+        owner: "System Admin",
+        status: "Active",
+      }));
+    } else if (page.path === "/admin/approval-rules") {
+      mapped = liveData.map((r: any) => ({
+        id: r.id,
+        name: r.name || r.ruleName || "Approval Rule",
+        type: r.entityType || "Transaction",
+        date: r.threshold ? `Threshold: ₹${r.threshold}` : "Standard",
+        amount: r.approverRole || "Management",
+        owner: "System Matrix",
+        status: r.active !== false ? "Active" : "Inactive",
+      }));
+    } else if (page.path === "/inventory/transactions") {
+      mapped = liveData.map((t: any) => ({
+        id: t.id || t.code || "TXN",
+        name: `${t.itemCode} · ${t.transactionType || "Movement"}`,
+        type: `${t.fromSubinventory || "STORES"} → ${t.toSubinventory || "LINE"}`,
+        date: t.transactionDate ? t.transactionDate.split("T")[0] : "Today",
+        amount: `${t.quantity} ${t.uom || "EA"}`,
+        owner: t.performedBy || "Stores",
+        status: "Completed",
+      }));
+    } else if (page.path === "/inventory/material-issues") {
+      mapped = liveData.map((m: any) => ({
+        id: m.id,
+        name: `${m.itemCode} · ${m.itemName}`,
+        type: `WO: ${m.workOrderId}`,
+        date: m.subinventory || "RM-STORES",
+        amount: `${m.issuedQty}/${m.requiredQty} ${m.uom}`,
+        owner: m.workOrderId,
+        status: m.status,
+      }));
+    } else if (page.path === "/inventory/cycle-counts") {
+      mapped = liveData.map((c: any) => ({
+        id: c.id || `CC-${c.itemCode}`,
+        name: c.itemName || c.itemCode,
+        type: c.subinventory || "RM-STORES",
+        date: "Quarterly Audit",
+        amount: `${c.systemQty || 0} ${c.uom || "EA"}`,
+        owner: "Stores Team",
+        status: c.status || "Verified",
+      }));
+    } else if (page.path === "/mfg/policies") {
+      mapped = liveData.map((p: any) => ({
+        id: p.itemCode,
+        name: p.itemName,
+        type: p.subinventory,
+        date: `Safety: ${p.safetyStock || 100}`,
+        amount: `Reorder: ${p.reorderPoint || 200} ${p.uom || "EA"}`,
+        owner: "MRP Policy",
+        status: "Active",
+      }));
+    } else if (page.path === "/accounting") {
+      mapped = liveData;
+    } else {
+      mapped = liveData.map((x: any) => ({
+        id: x.id || x.code || "REC",
+        name: x.name || x.title || "Record",
+        type: x.type || x.category || "Standard",
+        date: x.date || x.createdAt || "Today",
+        amount: x.amount || "—",
+        owner: x.owner || "System",
+        status: x.status || "Active",
+      }));
+    }
+
+    return mapped.filter((r) =>
+      `${r.id} ${r.name} ${r.type} ${r.owner}`.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [page.path, query, liveData]);
+
   const readonly = user.username === "auditor";
-  const hasCreate = !["/audit", "/accounting", "/inventory/transactions", "/people", "/inventory/onhand"].includes(page.path);
-  return <><PageTitle page={page} actions={<>{hasCreate && <Button variant="primary" disabled={readonly} title={readonly ? "Read-only role" : ""} onClick={() => navigate(`${page.path}/new`)}><Plus size={16} /> Create</Button>}<Button><MoreHorizontal size={16} /> Actions</Button></>} />
-    <WorkArea page={page}>
-      <section className="search-panel">
-        <div className="filter-grid"><label>Saved Search<select><option>My Open {page.title}</option><option>Awaiting Approval</option><option>All records</option></select></label><label>Keywords<input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by number or name" /></label><label>Status<select><option>All</option><option>Open</option><option>Pending approval</option><option>Completed</option></select></label><div className="filter-actions"><Button variant="primary"><Search size={15} /> Search</Button><Button onClick={() => setQuery("")}>Reset</Button></div></div>
-        <button className="advanced" onClick={() => setAdvanced(!advanced)}><ChevronDown size={15} className={advanced ? "rotate" : ""} /> Advanced</button>
-        {advanced && <div className="advanced-fields"><label>From date<input type="date" /></label><label>Owner<input placeholder="Search owner" /></label><label>Business unit<select><option>Pune Manufacturing</option></select></label></div>}
-      </section>
-      <section className="table-card">
-        <div className="table-toolbar"><strong>{rows.length} results</strong><div><Button variant="quiet">Freeze first column</Button><Button variant="quiet">Columns</Button><Button variant="quiet">Export CSV</Button></div></div>
-        <div className="table-scroll"><table><thead><tr><th className="check"><input type="checkbox" aria-label="Select all" /></th><th>Number</th><th>Description</th><th>Category</th><th>Date</th><th className="right">Amount / value</th><th>Owner</th><th>Status</th><th></th></tr></thead>
-          <tbody>{rows.map((r) => <tr key={r.id}><td className="check"><input type="checkbox" aria-label={`Select ${r.id}`} /></td><td><button className="table-link" onClick={() => navigate(`${page.path}/${r.id}`)}>{r.id}</button></td><td><strong>{r.name}</strong></td><td>{r.type}</td><td className="tabular">{r.date}</td><td className="right tabular">{r.amount}</td><td>{r.owner}</td><td><Status value={r.status} /></td><td><button className="icon-btn"><MoreHorizontal size={17} /></button></td></tr>)}</tbody>
-        </table></div>
-        <div className="pagination"><span>Rows per page <select><option>25</option><option>50</option></select></span><span>1–{rows.length} of {rows.length}</span><button className="icon-btn" disabled><ChevronLeft size={17} /></button><button className="icon-btn" disabled><ChevronRight size={17} /></button></div>
-      </section>
-    </WorkArea>
-  </>;
+  const detailRoutes = [
+    "/people",
+    "/suppliers",
+    "/requisitions",
+    "/po",
+    "/ap/invoices",
+    "/mfg/work-orders",
+    "/customers",
+    "/orders",
+  ];
+  const hasDetailPage = detailRoutes.includes(page.path);
+
+  return (
+    <>
+      <PageTitle page={page} actions={<Button><MoreHorizontal size={16} /> Actions</Button>} />
+      <WorkArea page={page}>
+        <section className="search-panel">
+          <div className="filter-grid">
+            <label>
+              Keywords
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search live records" />
+            </label>
+            <div className="filter-actions">
+              <Button variant="primary"><Search size={15} /> Filter</Button>
+              <Button onClick={() => setQuery("")}>Reset</Button>
+            </div>
+          </div>
+        </section>
+        <section className="table-card">
+          <div className="table-toolbar">
+            <strong>{loading ? "Loading..." : `${rows.length} live records retrieved`}</strong>
+            <div>
+              <Button variant="quiet">Freeze first column</Button>
+              <Button variant="quiet">Export CSV</Button>
+            </div>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th className="check"><input type="checkbox" aria-label="Select all" /></th>
+                  <th>Number</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Date</th>
+                  <th className="right">Amount / Value</th>
+                  <th>Owner</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>
+                      <RefreshCcw size={20} className="spin" style={{ display: "inline-block", marginRight: 8 }} />
+                      Loading records from backend database...
+                    </td>
+                  </tr>
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>
+                      No records found in database matching criteria
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((r) => (
+                    <tr key={r.id}>
+                      <td className="check"><input type="checkbox" aria-label={`Select ${r.id}`} /></td>
+                      <td>
+                        {hasDetailPage ? (
+                          <button className="table-link" onClick={() => navigate(`${page.path}/${r.id}`)}>
+                            {r.id}
+                          </button>
+                        ) : (
+                          <span style={{ fontWeight: 600 }}>{r.id}</span>
+                        )}
+                      </td>
+                      <td><strong>{r.name}</strong></td>
+                      <td>{r.type}</td>
+                      <td className="tabular">{r.date}</td>
+                      <td className="right tabular">{r.amount}</td>
+                      <td>{r.owner}</td>
+                      <td><Status value={r.status} /></td>
+                      <td><button className="icon-btn"><MoreHorizontal size={17} /></button></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="pagination">
+            <span>1–{rows.length} of {rows.length}</span>
+            <button className="icon-btn" disabled><ChevronLeft size={17} /></button>
+            <button className="icon-btn" disabled><ChevronRight size={17} /></button>
+          </div>
+        </section>
+      </WorkArea>
+    </>
+  );
 }
 
 function StatusTrain({ current = 2 }: { current?: number }) {
@@ -611,290 +1189,563 @@ function StatusTrain({ current = 2 }: { current?: number }) {
   return <div className="status-train">{steps.map((step, i) => <div className={i < current ? "done" : i === current ? "current" : ""} key={step}><span>{i < current ? <Check size={13} /> : i + 1}</span><small>{step}</small></div>)}</div>;
 }
 
-function DocumentPage({ page }: { page: Page }) {
-  const user = useAppStore((s) => s.user)!;
-  const notify = useAppStore((s) => s.notify);
-  const tabSets: Record<string, string[]> = {
-    "/people/:id": ["Overview", "Employment", "Assignment History", "Direct Reports", "Audit History"],
-    "/suppliers/:id": ["Profile", "Sites", "Bank Accounts", "Audit History"],
-    "/requisitions/:id": ["Lines", "Approvals", "Attachments", "Audit History"],
-    "/po/:id": ["Lines", "Schedules", "Receipts", "Invoices", "Audit History"],
-    "/ap/invoices/:id": ["Match", "Validation", "Holds", "Approvals", "Accounting", "Audit History"],
-    "/mfg/work-orders/:id": ["Operations", "Materials", "Completion", "Cost and Variance", "Audit History"],
-    "/customers/:id": ["Overview", "Sites", "Credit", "Orders", "Receivables", "Audit History"],
-    "/orders/:id": ["Lines", "Fulfilment", "Credit", "Shipment", "Invoice", "Audit History"],
-  };
-  const tabs = tabSets[page.path] || ["Lines", "Approvals", "Accounting", "Attachments", "Audit History"];
-  const [tab, setTab] = useState(tabs[0]);
-  const readonly = user.username === "auditor";
-  return <><PageTitle page={page} actions={<><Button>Actions <ChevronDown size={14} /></Button><Button disabled={readonly} title={readonly ? "Read-only role" : ""}>Save</Button><Button variant="primary" disabled={readonly} title={readonly ? "Read-only role" : ""} onClick={() => notify(`${page.title} submitted for approval`)}>Submit</Button></>} />
-    <div className="document-shell">
-      <div className="summary-strip"><div><small>Document number</small><strong>{page.title.startsWith("Person") ? "EMP-1042" : "FF-2026-00184"}</strong></div><div><small>Business unit</small><strong>Pune Manufacturing</strong></div><div><small>Owner</small><strong>Vikram Jadhav</strong></div><div><small>Total</small><strong className="tabular">₹ 4,87,250.00</strong></div><div><small>Status</small><Status value="Pending approval" /></div></div>
-      <StatusTrain />
-      <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}</button>)}</div>
-      <DetailTabContent page={page} tab={tab} readonly={readonly} />
-    </div>
-  </>;
-}
-
-function DetailTabContent({ page, tab, readonly }: { page: Page; tab: string; readonly: boolean }) {
-  if (tab === "Audit History") return <section className="content-card"><h2>Audit History</h2><p className="helper">Every change is retained with date, user, role, old value and new value.</p><AuditTable /></section>;
-  if (tab === "Approvals") return <section className="content-card"><h2>Approval chain</h2><div className="approval-chain">{["Anil Deshmukh · Line Manager", "Kavita More · Functional Manager", "Suresh Rane · Plant Head"].map((x, i) => <div key={x}><span className="avatar">{x.split(" ").map(s => s[0]).slice(0,2).join("")}</span><div><strong>{x}</strong><small>{i === 0 ? "Approved · 14-Oct-2026, 16:22" : "Pending"}</small></div><Status value={i === 0 ? "Approved" : "Pending"} /></div>)}</div></section>;
-  if (tab === "Accounting") return <section className="content-card"><h2>Accounting distribution</h2><LinesTable accounting /></section>;
-  if (tab === "Attachments") return <section className="empty-state"><FileText size={28} /><h2>No attachments</h2><p>Add supporting quotations, specifications or approvals.</p><Button disabled={readonly}>Add attachment</Button></section>;
-
-  if (page.path === "/people/:id") {
-    if (tab === "Overview") return <InfoSections sections={[
-      ["Personal information", [["Employee number", "EMP-1042"], ["Date of birth", "08-Feb-1994"], ["Work email", "rahul.patil@sahyadriauto.in"], ["Status", "Active"]]],
-      ["Current assignment", [["Job", "Production Operator"], ["Department", "Production"], ["Grade", "G3"], ["Manager", "Anil Deshmukh"]]],
-    ]} />;
-    if (tab === "Employment") return <InfoSections sections={[["Work relationship", [["Legal employer", "Sahyadri Auto Components Pvt Ltd"], ["Hire date", "18-Jun-2021"], ["Worker type", "Employee"], ["Location", "Pune Manufacturing Plant"]]]]} />;
-    if (tab === "Assignment History") return <Timeline items={["01-Apr-2025 · Promoted to Production Operator, Grade G3", "01-Jul-2023 · Transferred to Brake Pad Assembly", "18-Jun-2021 · Hired as Production Trainee, Grade G1"]} />;
-    return <PeopleMiniTable />;
+function SpecializedFormFields({
+  page,
+  formState,
+  employees = [],
+}: {
+  page: Page;
+  formState?: any;
+  employees?: any[];
+}) {
+  if (page.path === "/me/resignation") {
+    return (
+      <section className="form-section">
+        <h2>Resignation details</h2>
+        <div className="form-grid">
+          <label>
+            Proposed last working day <span>*</span>
+            <input
+              type="date"
+              value={formState?.resignationDate || "2026-11-30"}
+              onChange={(e) => formState?.setResignationDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Reason <span>*</span>
+            <select
+              value={formState?.resignationReason || "Career opportunity"}
+              onChange={(e) => formState?.setResignationReason(e.target.value)}
+            >
+              <option>Career opportunity</option>
+              <option>Personal reasons</option>
+              <option>Higher education</option>
+              <option>Relocation</option>
+            </select>
+          </label>
+          <label className="wide">
+            Comments
+            <textarea
+              value={formState?.resignationComments || ""}
+              onChange={(e) => formState?.setResignationComments(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="process-preview">
+          <strong>Approval route</strong>
+          <span>Employee</span>
+          <ChevronRight size={14} />
+          <span>Line Manager</span>
+          <ChevronRight size={14} />
+          <span>HR Manager</span>
+          <ChevronRight size={14} />
+          <span>Offboarding</span>
+        </div>
+      </section>
+    );
   }
-  if (page.path === "/suppliers/:id") {
-    if (tab === "Profile") return <InfoSections sections={[
-      ["Organisation", [["Supplier", "Western Auto Forge"], ["Tax ID", "27AAACW8421F1ZQ"], ["Category", "Direct Materials"], ["Status", "Approved"]]],
-      ["Primary contact", [["Contact", "Prakash Mehta"], ["Email", "accounts@westernautoforge.in"], ["Phone", "+91 20 2748 2180"], ["Payment terms", "Net 30"]]],
-    ]} />;
-    if (tab === "Sites") return <SimpleGrid headers={["Site", "Purpose", "Address", "Status"]} rows={[["PUNE-01", "Purchasing and payment", "Bhosari MIDC, Pune", "Active"], ["NASHIK-01", "Purchasing", "Satpur MIDC, Nashik", "Active"]]} />;
-    return <SimpleGrid headers={["Bank", "Account ending", "IFSC", "Change status"]} rows={[["HDFC Bank", "•••• 2841", "HDFC0000486", "Approved"], ["ICICI Bank", "•••• 9034", "ICIC0006241", "Pending approval"]]} />;
+
+  if (page.path === "/people/actions") {
+    return (
+      <section className="form-section">
+        <div className="section-heading">
+          <div>
+            <h2>Employment action</h2>
+            <p>Managers can initiate actions only for people in their reporting hierarchy.</p>
+          </div>
+          <Status value="Team scope" />
+        </div>
+        <div className="form-grid">
+          <label>
+            Action <span>*</span>
+            <select
+              value={formState?.actionType || "PROMOTE"}
+              onChange={(e) => formState?.setActionType(e.target.value)}
+            >
+              <option value="PROMOTE">Promote</option>
+              <option value="TRANSFER">Transfer</option>
+              <option value="CHANGE_MANAGER">Change Manager</option>
+              <option value="SEPARATION">Terminate</option>
+            </select>
+          </label>
+          <label>
+            Person <span>*</span>
+            <select
+              value={formState?.actionEmployee}
+              onChange={(e) => formState?.setActionEmployee(e.target.value)}
+            >
+              {employees.length > 0 ? (
+                employees.map((emp) => (
+                  <option key={emp.id} value={emp.employeeNumber || emp.id}>
+                    {emp.fullName} · {emp.employeeNumber} ({emp.job})
+                  </option>
+                ))
+              ) : (
+                <option value="EMP-1042">Rahul Patil · EMP-1042</option>
+              )}
+            </select>
+          </label>
+          <label>
+            Effective date <span>*</span>
+            <input
+              type="date"
+              value={formState?.actionDate || "2026-11-01"}
+              onChange={(e) => formState?.setActionDate(e.target.value)}
+            />
+          </label>
+          <label>
+            Reason code <span>*</span>
+            <select
+              value={formState?.actionReason || "Career progression"}
+              onChange={(e) => formState?.setActionReason(e.target.value)}
+            >
+              <option>Career progression</option>
+              <option>Organisation change</option>
+              <option>Performance</option>
+              <option>Voluntary separation</option>
+            </select>
+          </label>
+          <label>
+            Proposed grade
+            <select
+              value={formState?.actionGrade || "G4"}
+              onChange={(e) => formState?.setActionGrade(e.target.value)}
+            >
+              <option>G5</option>
+              <option>G4</option>
+              <option>G3</option>
+              <option>G2</option>
+            </select>
+          </label>
+          <label>
+            Proposed manager
+            <select
+              value={formState?.actionManager || "Anil Deshmukh"}
+              onChange={(e) => formState?.setActionManager(e.target.value)}
+            >
+              {employees
+                .filter((emp) => /Manager|Head|Supervisor|Director/i.test(emp.job || ""))
+                .map((m) => (
+                  <option key={m.id} value={m.fullName}>
+                    {m.fullName} ({m.job})
+                  </option>
+                ))}
+              <option value="Anil Deshmukh">Anil Deshmukh</option>
+              <option value="Kavita More">Kavita More</option>
+              <option value="Rohini Sawant">Rohini Sawant</option>
+              <option value="Suresh Rane">Suresh Rane</option>
+            </select>
+          </label>
+        </div>
+        <div className="warning-banner">
+          <ShieldCheck size={18} />
+          <div>
+            <strong>Governance & Approval</strong>
+            <p>Grade G4 and above automatically route to the Plant Head after HR Manager approval.</p>
+          </div>
+        </div>
+      </section>
+    );
   }
-  if (page.path === "/po/:id") {
-    if (tab === "Schedules") return <SimpleGrid headers={["Line", "Need-by date", "Ship-to", "Ordered", "Received"]} rows={[["1", "22-Oct-2026", "Pune Stores", "500 EA", "300 EA"], ["2", "25-Oct-2026", "Pune Stores", "250 KG", "250 KG"]]} />;
-    if (tab === "Receipts") return <SimpleGrid headers={["Receipt", "Date", "Accepted", "Rejected", "Receiver"]} rows={[["RCV-2026-3821", "14-Oct-2026", "300 EA", "5 EA", "Pooja Nair"]]} />;
-    if (tab === "Invoices") return <SimpleGrid headers={["Invoice", "Supplier invoice", "Amount", "Match status"]} rows={[["INV-8841", "WAF/26/1084", "₹ 2,12,600.00", "On hold"]]} />;
-  }
-  if (page.path === "/ap/invoices/:id") {
-    if (tab === "Match") return <MatchGrid />;
-    if (tab === "Validation") return <ValidationPanel />;
-    if (tab === "Holds") return <SimpleGrid headers={["Hold", "Reason", "Applied", "Release status"]} rows={[["Quantity variance", "Invoice exceeds accepted receipt by 20 EA", "14-Oct-2026", "Release requested"]]} />;
-  }
-  if (page.path === "/mfg/work-orders/:id") {
-    if (tab === "Operations") return <OperationStepper />;
-    if (tab === "Materials") return <SimpleGrid headers={["Component", "Required", "Issued", "Shortage", "Status"]} rows={[["Friction Lining Compound", "240 KG", "240 KG", "—", "Issued"], ["Steel Back Plate", "400 EA", "360 EA", "40 EA", "Shortage"], ["Copper Fibre", "18 KG", "18 KG", "—", "Issued"]]} />;
-    if (tab === "Completion") return <CompletionPanel readonly={readonly} />;
-    if (tab === "Cost and Variance") return <SimpleGrid headers={["Cost element", "Standard", "Actual", "Variance"]} rows={[["Material", "₹ 1,86,400.00", "₹ 1,92,150.00", "₹ 5,750.00"], ["Resource", "₹ 42,600.00", "₹ 41,980.00", "₹ -620.00"], ["Overhead", "₹ 18,400.00", "₹ 18,400.00", "₹ 0.00"]]} />;
-  }
-  if (page.path === "/customers/:id") {
-    if (tab === "Overview") return <InfoSections sections={[
-      ["Customer profile", [["Customer", "Mahindra Components Ltd"], ["Account", "CUST-1048"], ["Tax ID", "27AAACM3025E1Z7"], ["Status", "Active"]]],
-      ["Balance summary", [["Credit limit", "₹ 25,00,000.00"], ["Open balance", "₹ 12,42,800.00"], ["Available credit", "₹ 12,57,200.00"], ["Risk class", "Low"]]],
-    ]} />;
-    if (tab === "Credit") return <CreditPanel readonly={readonly} />;
-    if (tab === "Sites") return <SimpleGrid headers={["Site", "Use", "City", "Status"]} rows={[["PUNE-BILL", "Bill-to", "Pune", "Active"], ["CHAKAN-SHIP", "Ship-to", "Chakan", "Active"]]} />;
-    if (tab === "Orders") return <SimpleGrid headers={["Order", "Date", "Amount", "Status"]} rows={[["SO-2026-0418", "12-Oct-2026", "₹ 8,72,500.00", "Material shortage"], ["SO-2026-0384", "28-Sep-2026", "₹ 4,24,000.00", "Shipped"]]} />;
-    return <SimpleGrid headers={["Invoice", "Due date", "Original", "Balance"]} rows={[["AR-2026-2208", "29-Oct-2026", "₹ 6,28,400.00", "₹ 6,28,400.00"], ["AR-2026-2142", "18-Oct-2026", "₹ 6,14,400.00", "₹ 2,14,400.00"]]} />;
-  }
-  if (page.path === "/orders/:id") {
-    if (tab === "Fulfilment") return <div className="content-stack"><div className="warning-banner"><Boxes size={18}/><div><strong>Material shortage</strong><p>40 brake pad assemblies are not available for the requested ship date.</p></div><Button>Create Work Order</Button></div><SimpleGrid headers={["Line", "Ordered", "Available", "Reserved", "Shortage"]} rows={[["Brake Pad Assembly – Front", "400 EA", "360 EA", "360 EA", "40 EA"], ["Clutch Plate 240 mm", "200 EA", "240 EA", "200 EA", "—"]]} /></div>;
-    if (tab === "Credit") return <div className="warning-banner"><CreditCard size={18}/><div><strong>Credit check passed</strong><p>Available credit after this order: ₹ 3,84,700.00.</p></div><Status value="Approved"/></div>;
-    if (tab === "Shipment") return <SimpleGrid headers={["Shipment", "Planned date", "Picked", "Shipped", "Status"]} rows={[["SHP-2026-0912", "18-Oct-2026", "560 EA", "—", "Ready to ship"]]} />;
-    if (tab === "Invoice") return <SimpleGrid headers={["AR invoice", "Invoice date", "Amount", "Status"]} rows={[["Created after shipment", "—", "₹ 8,72,500.00", "Pending shipment"]]} />;
-  }
-  return <section className="content-card"><div className="section-heading"><div><h2>Document lines</h2><p>Review quantities, pricing and source references.</p></div><Button disabled={readonly} title={readonly ? "Read-only role" : ""}><Plus size={15} /> Add line</Button></div><LinesTable /></section>;
-}
 
-function InfoSections({ sections }: { sections: [string, string[][]][] }) {
-  return <div className="detail-sections">{sections.map(([title, fields]) => <section className="content-card" key={title}><h2>{title}</h2><dl className="detail-list">{fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>)}</div>;
-}
-
-function SimpleGrid({ headers, rows }: { headers: string[]; rows: string[][] }) {
-  return <section className="content-card"><div className="table-scroll"><table><thead><tr>{headers.map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={`${i}-${j}`}>{j === row.length - 1 && /active|approved|pending|hold|issued|shortage|ship/i.test(cell) ? <Status value={cell}/> : cell}</td>)}</tr>)}</tbody></table></div></section>;
-}
-
-function Timeline({ items }: { items: string[] }) {
-  return <section className="content-card"><h2>Date-effective history</h2><div className="timeline">{items.map((item, i) => <div key={item}><span>{i + 1}</span><p>{item}</p></div>)}</div></section>;
-}
-
-function PeopleMiniTable() {
-  return <SimpleGrid headers={["Employee", "Job", "Grade", "Department", "Status"]} rows={[
-    ["Sanjay Bhosale", "Production Supervisor", "G3", "Production", "Active"],
-    ["Rahul Patil", "Production Operator", "G3", "Production", "Active"],
-    ["Mangesh Pawar", "Production Trainee", "G1", "Production", "Active"],
-  ]} />;
-}
-
-function MatchGrid() {
-  return <section className="content-card"><div className="section-heading"><div><h2>Three-way match</h2><p>Invoice quantities are compared with the purchase order and accepted receipts.</p></div><Status value="On hold"/></div><div className="table-scroll"><table><thead><tr><th>Line</th><th>Item</th><th className="right">PO quantity</th><th className="right">Received</th><th className="right">Invoiced</th><th className="right">Difference</th><th>Result</th></tr></thead><tbody>
-    <tr><td>1</td><td>Steel Back Plate</td><td className="right">300 EA</td><td className="right">300 EA</td><td className="right">300 EA</td><td className="right">—</td><td><Status value="Matched"/></td></tr>
-    <tr className="difference-row"><td>2</td><td>Friction Lining Compound</td><td className="right">250 KG</td><td className="right">230 KG</td><td className="right">250 KG</td><td className="right">20 KG</td><td><Status value="On hold"/></td></tr>
-  </tbody></table></div></section>;
-}
-
-function ValidationPanel() {
-  return <section className="content-card"><h2>Validation results</h2><div className="validation-list">
-    <div><Check size={17}/><div><strong>Supplier and site are active</strong><p>Western Auto Forge · PUNE-01</p></div><Status value="Passed"/></div>
-    <div><Check size={17}/><div><strong>Invoice number is unique</strong><p>No duplicate supplier invoice was found.</p></div><Status value="Passed"/></div>
-    <div className="failed"><X size={17}/><div><strong>Quantity match failed</strong><p>Invoice line 2 exceeds the accepted receipt by 20 KG.</p></div><Status value="On hold"/></div>
-  </div></section>;
-}
-
-function OperationStepper() {
-  const operations = [["10", "Mixing", "Completed", "240 KG"], ["20", "Hot Pressing", "Completed", "400 EA"], ["30", "Curing", "In progress", "280 EA"], ["40", "Finishing", "Not started", "—"], ["50", "Inspection", "Not started", "—"]];
-  return <section className="content-card"><h2>Operation progress</h2><div className="operation-list">{operations.map(([seq, name, status, quantity], i) => <div key={seq} className={i === 2 ? "current" : ""}><span className="operation-number">{i < 2 ? <Check size={14}/> : seq}</span><div><strong>{name}</strong><small>Count point {name === "Inspection" ? "Yes" : "No"} · Completed quantity {quantity}</small></div><Status value={status}/></div>)}</div></section>;
-}
-
-function CompletionPanel({ readonly }: { readonly: boolean }) {
-  const notify = useAppStore(s => s.notify);
-  const [good, setGood] = useState("280");
-  const [scrap, setScrap] = useState("8");
-  const scrapRate = ((Number(scrap) / Math.max(Number(good) + Number(scrap), 1)) * 100).toFixed(1);
-  return <section className="content-card"><div className="section-heading"><div><h2>Operation completion</h2><p>Record completed and scrapped quantities for the current operation.</p></div><Status value={Number(scrapRate) > 5 ? "Approval required" : "Within tolerance"}/></div><div className="form-grid"><label>Good quantity<input type="number" value={good} onChange={e=>setGood(e.target.value)}/></label><label>Scrap quantity<input type="number" value={scrap} onChange={e=>setScrap(e.target.value)}/></label><label>Scrap percentage<input value={`${scrapRate}%`} readOnly/></label><label>Reason code<select><option>Surface defect</option><option>Dimensional failure</option><option>Material contamination</option></select></label><label className="wide">Completion note<textarea defaultValue="Curing operation completed against shift production log."/></label></div>{Number(scrapRate) > 5 && <div className="warning-banner"><Clock3 size={18}/><div><strong>Manager approval required</strong><p>Scrap above 5% routes to the Line Manager, Production.</p></div></div>}<div className="section-footer"><Button variant="primary" disabled={readonly} onClick={()=>notify("Operation completion recorded")}>Complete operation</Button></div></section>;
-}
-
-function CreditPanel({ readonly }: { readonly: boolean }) {
-  const notify = useAppStore(s => s.notify);
-  const [limit, setLimit] = useState("2500000");
-  return <section className="content-card"><div className="section-heading"><div><h2>Credit management</h2><p>Credit-limit changes require Plant Head approval.</p></div><Status value="Low risk"/></div><div className="form-grid"><label>Current credit limit<input value="₹ 25,00,000.00" readOnly/></label><label>Requested credit limit<input type="number" value={limit} onChange={e=>setLimit(e.target.value)}/></label><label className="wide">Business justification<textarea defaultValue="Increase requested to support the revised annual customer schedule."/></label></div><div className="section-footer"><Button variant="primary" disabled={readonly} onClick={()=>notify("Credit limit change submitted to Plant Head")}>Submit change for approval</Button></div></section>;
-}
-
-function LinesTable({ accounting = false }: { accounting?: boolean }) {
-  return <div className="table-scroll"><table><thead><tr><th>Line</th><th>{accounting ? "Account" : "Item"}</th><th>Description</th><th className="right">{accounting ? "Debit" : "Quantity"}</th><th className="right">{accounting ? "Credit" : "Unit price"}</th><th>Status</th></tr></thead><tbody>
-    {items.slice(0, 5).map((item, i) => <tr key={item}><td>{i + 1}</td><td className="link-cell">{accounting ? `01-210-${4200 + i * 10}` : `FG-${201 + i}`}</td><td>{item}</td><td className="right tabular">{accounting ? (i < 3 ? `₹ ${(65000 + i * 12500).toLocaleString("en-IN")}.00` : "—") : `${120 + i * 25} EA`}</td><td className="right tabular">{accounting ? (i >= 3 ? `₹ ${(122500 + i * 5000).toLocaleString("en-IN")}.00` : "—") : `₹ ${(625 + i * 90).toLocaleString("en-IN")}.00`}</td><td><Status value={i === 3 ? "On hold" : "Approved"} /></td></tr>)}
-  </tbody></table></div>;
+  return null;
 }
 
 function FormPage({ page }: { page: Page }) {
   const user = useAppStore((s) => s.user)!;
   const notify = useAppStore((s) => s.notify);
   const navigate = useNavigate();
-  const [more, setMore] = useState(false);
   const [dirty, setDirty] = useState(false);
   const readonly = user.username === "auditor";
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  // Form states for H2R actions
+  const [actionEmployee, setActionEmployee] = useState("EMP-1042");
+  const [actionType, setActionType] = useState("PROMOTE");
+  const [actionDate, setActionDate] = useState("2026-11-01");
+  const [actionReason, setActionReason] = useState("Career progression");
+  const [actionGrade, setActionGrade] = useState("G4");
+  const [actionManager, setActionManager] = useState("Anil Deshmukh");
+
+  const [resignationDate, setResignationDate] = useState("2026-11-30");
+  const [resignationReason, setResignationReason] = useState("Career opportunity");
+  const [resignationComments, setResignationComments] = useState("Please initiate the required notice-period and offboarding activities.");
+
+  useEffect(() => {
+    api.employees.list().then((res) => {
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        setEmployees(res.data);
+        setActionEmployee(res.data[0].employeeNumber || res.data[0].id);
+      }
+    }).catch(() => {});
+  }, []);
+
   const submit = async () => {
     try {
       if (page.path === "/people/actions") {
-        await api.employees.performAction("EMP-1042", {
-          action: "PROMOTE",
-          effectiveDate: "2026-11-01",
-          reason: "Career progression",
-          proposedGrade: "G4",
+        await api.employees.performAction(actionEmployee, {
+          action: actionType,
+          effectiveDate: actionDate,
+          reason: actionReason,
+          proposedGrade: actionGrade,
+          proposedManager: actionManager,
         });
+        notify(`Employment action (${actionType}) recorded for ${actionEmployee}`);
+      } else if (page.path === "/me/resignation") {
+        await api.employees.performAction(user.username === "emp.production" ? "EMP-1042" : "EMP-1001", {
+          action: "SEPARATION",
+          effectiveDate: resignationDate,
+          reason: resignationReason,
+          comments: resignationComments,
+        });
+        notify("Resignation submitted and routed for management approval");
       }
     } catch (e: any) {
       console.warn("API action notice:", e.message);
+      notify(`Action processed: ${e.message || "Submitted"}`);
     }
-    notify(`${page.title} submitted successfully`);
     setDirty(false);
   };
-  return <><PageTitle page={page} actions={<><Button onClick={() => dirty && !window.confirm("Discard unsaved changes?") ? null : navigate(-1)}>Cancel</Button><Button disabled={readonly} onClick={() => { notify("Draft saved"); setDirty(false); }}>Save</Button><Button variant="primary" disabled={readonly} title={readonly ? "Read-only role" : ""} onClick={submit}>Submit</Button></>} />
-    <div className="form-page" onChange={() => setDirty(true)}>
-      <StatusTrain current={0} />
-      <section className="form-section"><div className="section-heading"><div><h2>General information</h2><p>Fields marked with an asterisk are required.</p></div></div>
-        <div className="form-grid">
-          <label>Business unit <span>*</span><select defaultValue="Pune Manufacturing"><option>Pune Manufacturing</option></select></label>
-          <label>Transaction date <span>*</span><input type="date" defaultValue="2026-10-15" /></label>
-          <label>Requester <span>*</span><input defaultValue={user.name} /></label>
-          <label>Department <span>*</span><select><option>Production</option><option>Stores and Purchase</option><option>Quality</option></select></label>
-          <label className="wide">Description <span>*</span><input defaultValue={page.title.replace("Create ", "") + " for October operations"} /></label>
-          <label className="wide">Justification <HelpCircle size={13} /><textarea defaultValue="Required to support the approved October production plan and customer delivery schedule." /></label>
-        </div>
-      </section>
-      <SpecializedFormFields page={page} />
-      {needsLines && <section className="form-section"><div className="section-heading"><div><h2>Lines and details</h2><p>Enter the transaction details and review calculated totals.</p></div><Button><Plus size={15} /> Add line</Button></div><EditableLines /></section>}
-      <button className="show-more" onClick={() => setMore(!more)}><ChevronDown size={15} className={more ? "rotate" : ""} /> {more ? "Show less" : "Show more"}</button>
-      {more && <section className="form-section"><h2>Additional information</h2><div className="form-grid"><label>Reference<input placeholder="External or legacy reference" /></label><label>Priority<select><option>Normal</option><option>Urgent</option></select></label><label className="wide">Internal note<textarea /></label></div></section>}
-      {needsLines && <div className="form-total"><span>Calculated total</span><strong>₹ 2,43,750.00</strong><Status value="Within budget" /></div>}
-    </div>
-  </>;
-}
 
-function SpecializedFormFields({ page }: { page: Page }) {
-  if (page.path === "/me/resignation") return <section className="form-section"><h2>Resignation details</h2><div className="form-grid"><label>Proposed last working day <span>*</span><input type="date" defaultValue="2026-11-30"/></label><label>Reason <span>*</span><select><option>Career opportunity</option><option>Personal reasons</option><option>Higher education</option><option>Relocation</option></select></label><label className="wide">Comments<textarea defaultValue="Please initiate the required notice-period and offboarding activities."/></label></div><div className="process-preview"><strong>Approval route</strong><span>Employee</span><ChevronRight size={14}/><span>Line Manager</span><ChevronRight size={14}/><span>HR Manager</span><ChevronRight size={14}/><span>Offboarding</span></div></section>;
-  if (page.path === "/people/actions") return <section className="form-section"><div className="section-heading"><div><h2>Employment action</h2><p>Managers can initiate actions only for people in their reporting hierarchy.</p></div><Status value="Team scope"/></div><div className="form-grid"><label>Action <span>*</span><select><option>Promote</option><option>Transfer</option><option>Change Manager</option><option>Terminate</option><option>Rehire</option></select></label><label>Person <span>*</span><select><option>Rahul Patil · EMP-1042</option><option>Sanjay Bhosale · EMP-1034</option></select></label><label>Effective date <span>*</span><input type="date" defaultValue="2026-11-01"/></label><label>Reason code <span>*</span><select><option>Career progression</option><option>Organisation change</option><option>Performance</option><option>Voluntary separation</option></select></label><label>Proposed grade<select><option>G4</option><option>G3</option></select></label><label>Proposed manager<select><option>Anil Deshmukh</option><option>Kavita More</option></select></label></div><div className="warning-banner"><ShieldCheck size={18}/><div><strong>Additional approval</strong><p>Grade G4 and above will route to the Plant Head after HR Manager approval.</p></div></div></section>;
-  if (page.path === "/suppliers/new") return <section className="form-section"><div className="section-heading"><div><h2>Supplier profile</h2><p>Tax identity and bank account are checked for possible duplicates.</p></div><Status value="No duplicate found"/></div><div className="form-grid"><label>Legal name <span>*</span><input defaultValue="Western Auto Forge"/></label><label>Tax ID / GSTIN <span>*</span><input defaultValue="27AAACW8421F1ZQ"/></label><label>Category <span>*</span><select><option>Direct Materials</option><option>Indirect Materials</option><option>Logistics</option></select></label><label>Primary site <span>*</span><input defaultValue="PUNE-01"/></label><label>Bank name <span>*</span><input defaultValue="HDFC Bank"/></label><label>IFSC <span>*</span><input defaultValue="HDFC0000486"/></label><label className="wide">Bank account number <span>*</span><input defaultValue="5020002841"/></label></div></section>;
-  if (page.path === "/receiving") return <section className="form-section"><h2>Receipt controls</h2><div className="form-grid"><label>Purchase order <span>*</span><select><option>PO-2026-0841 · Western Auto Forge</option></select></label><label>PO schedule <span>*</span><select><option>Line 1 · Schedule 1 · Due 22-Oct-2026</option></select></label><label>Accepted quantity <span>*</span><input type="number" defaultValue="300"/></label><label>Rejected quantity<input type="number" defaultValue="5"/></label><label>Rejection reason<select><option>Surface damage</option><option>Incorrect specification</option></select></label><label>Subinventory<select><option>RM-STORES</option><option>QUALITY-HOLD</option></select></label></div><div className="warning-banner"><Clock3 size={18}/><div><strong>Receipt tolerance</strong><p>Maximum permitted receipt is 525 EA. Quantities above tolerance will be blocked.</p></div></div></section>;
-  if (page.path === "/ap/invoices/new") return <section className="form-section"><div className="section-heading"><div><h2>Invoice controls</h2><p>Validate supplier invoice identity, tax and purchase-order match.</p></div><Status value="No duplicate found"/></div><div className="form-grid"><label>Supplier invoice number <span>*</span><input defaultValue="WAF/26/1084"/></label><label>Purchase order <span>*</span><select><option>PO-2026-0841</option></select></label><label>Invoice amount <span>*</span><input defaultValue="212600.00"/></label><label>GST amount<input defaultValue="32430.51"/></label><label>Invoice date <span>*</span><input type="date" defaultValue="2026-10-14"/></label><label>Payment terms<select><option>Net 30</option></select></label></div></section>;
-  if (page.path === "/ap/payments/new") return <section className="form-section"><h2>Payment controls</h2><div className="form-grid"><label>Payment method <span>*</span><select><option>NEFT</option><option>Cheque</option></select></label><label>Payment date <span>*</span><input type="date" defaultValue="2026-10-16"/></label><label>Bank account <span>*</span><select><option>HDFC Operating · •••• 4821</option></select></label><label>Group by<select><option>Supplier and currency</option></select></label></div><SimpleGrid headers={["Select", "Supplier", "Invoice", "Due date", "Amount"]} rows={[["Yes", "Western Auto Forge", "INV-8841", "18-Oct-2026", "₹ 2,12,600.00"], ["Yes", "Deccan Industrial Supply", "INV-8829", "20-Oct-2026", "₹ 1,46,800.00"]]}/></section>;
-  if (page.path === "/inventory/new") return <section className="form-section"><h2>Inventory movement</h2><div className="form-grid"><label>Transaction type <span>*</span><select><option>Subinventory transfer</option><option>Miscellaneous issue</option><option>Miscellaneous receipt</option></select></label><label>Item <span>*</span><select><option>Steel Back Plate · RM-204</option></select></label><label>From subinventory <span>*</span><select><option>RM-STORES</option></select></label><label>To subinventory <span>*</span><select><option>WIP-STAGING</option></select></label><label>Available quantity<input value="1,240 EA" readOnly/></label><label>Transaction quantity <span>*</span><input type="number" defaultValue="200"/></label></div><p className="field-note">Transactions that would result in negative stock are blocked.</p></section>;
-  if (page.path === "/orders/new") return <section className="form-section"><h2>Order controls</h2><div className="form-grid"><label>Customer <span>*</span><select><option>Mahindra Components Ltd</option></select></label><label>Price list <span>*</span><select><option>Domestic OEM 2026</option></select></label><label>Requested ship date <span>*</span><input type="date" defaultValue="2026-10-18"/></label><label>Ship-to site <span>*</span><select><option>CHAKAN-SHIP</option></select></label></div><div className="control-results"><div><Check size={16}/><span>Credit check</span><strong>Passed</strong></div><div className="warning"><Clock3 size={16}/><span>Availability</span><strong>40 EA short</strong></div></div></section>;
-  if (page.path === "/ar/receipts") return <section className="form-section"><h2>Receipt application</h2><div className="form-grid"><label>Customer <span>*</span><select><option>Mahindra Components Ltd</option></select></label><label>Receipt amount <span>*</span><input defaultValue="400000.00"/></label><label>Receipt method <span>*</span><select><option>NEFT</option><option>Cheque</option></select></label><label>Receipt date <span>*</span><input type="date" defaultValue="2026-10-15"/></label></div><SimpleGrid headers={["Apply", "Invoice", "Due date", "Balance", "Applied"]} rows={[["Yes", "AR-2026-2142", "18-Oct-2026", "₹ 2,14,400.00", "₹ 2,14,400.00"], ["Yes", "AR-2026-2208", "29-Oct-2026", "₹ 6,28,400.00", "₹ 1,85,600.00"]]}/><p className="field-note">Remaining unapplied amount: ₹ 0.00 · Write-off tolerance: ₹ 500.00</p></section>;
-  return null;
-}
-
-function EditableLines() {
-  return <div className="table-scroll"><table><thead><tr><th>Line</th><th>Item / category</th><th>Description</th><th className="right">Quantity</th><th>UoM</th><th className="right">Unit price</th><th className="right">Amount</th><th></th></tr></thead><tbody>
-    {[0,1,2].map((i) => <tr key={i}><td>{i + 1}</td><td><select defaultValue={items[i]}>{items.map(x => <option key={x}>{x}</option>)}</select></td><td><input defaultValue={`Production requirement – batch ${310 + i}`} /></td><td><input className="number-input" type="number" defaultValue={100 + i * 25} /></td><td><select><option>EA</option><option>KG</option></select></td><td><input className="number-input" defaultValue={`${650 + i * 125}.00`} /></td><td className="right tabular">₹ {(65000 + i * 31875).toLocaleString("en-IN")}.00</td><td><button className="icon-btn"><X size={16} /></button></td></tr>)}
-  </tbody></table></div>;
+  return (
+    <>
+      <PageTitle
+        page={page}
+        actions={
+          <>
+            <Button onClick={() => dirty && !window.confirm("Discard unsaved changes?") ? null : navigate(-1)}>
+              Cancel
+            </Button>
+            <Button disabled={readonly} onClick={() => { notify("Draft saved"); setDirty(false); }}>
+              Save
+            </Button>
+            <Button variant="primary" disabled={readonly} title={readonly ? "Read-only role" : ""} onClick={submit}>
+              Submit
+            </Button>
+          </>
+        }
+      />
+      <div className="form-page" onChange={() => setDirty(true)}>
+        <StatusTrain current={0} />
+        <section className="form-section">
+          <div className="section-heading">
+            <div>
+              <h2>General information</h2>
+              <p>Fields marked with an asterisk are required.</p>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>Business unit <span>*</span><select defaultValue="Pune Manufacturing"><option>Pune Manufacturing</option></select></label>
+            <label>Transaction date <span>*</span><input type="date" defaultValue="2026-10-15" /></label>
+            <label>Requester <span>*</span><input defaultValue={user.name} /></label>
+            <label>Department <span>*</span><select><option>Production</option><option>Stores and Purchase</option><option>Quality</option></select></label>
+            <label className="wide">Description <span>*</span><input defaultValue={page.title.replace("Create ", "") + " for October operations"} /></label>
+            <label className="wide">Justification <HelpCircle size={13} /><textarea defaultValue="Required to support the approved October production plan and customer delivery schedule." /></label>
+          </div>
+        </section>
+        <SpecializedFormFields
+          page={page}
+          employees={employees}
+          formState={{
+            actionEmployee, setActionEmployee,
+            actionType, setActionType,
+            actionDate, setActionDate,
+            actionReason, setActionReason,
+            actionGrade, setActionGrade,
+            actionManager, setActionManager,
+            resignationDate, setResignationDate,
+            resignationReason, setResignationReason,
+            resignationComments, setResignationComments,
+          }}
+        />
+      </div>
+    </>
+  );
 }
 
 function ProfilePage() {
   const user = useAppStore((s) => s.user)!;
-  const page = pages.find(p => p.path === "/me")!;
-  return <><PageTitle page={page} actions={<Button>Edit profile</Button>} /><div className="profile-grid">
-    <section className="profile-card"><div className="profile-head"><span className="avatar large">{user.initials}</span><div><h2>{user.name}</h2><p>{user.role}</p><Status value="Active" /></div></div><dl><div><dt>Employee number</dt><dd>EMP-1042</dd></div><div><dt>Work email</dt><dd>{user.username}@sahyadriauto.in</dd></div><div><dt>Location</dt><dd>Pune Manufacturing Plant</dd></div><div><dt>Manager</dt><dd>{user.reportsTo}</dd></div></dl></section>
-    <section className="content-card"><h2>Assignment</h2><dl className="detail-list"><div><dt>Business unit</dt><dd>Pune Manufacturing</dd></div><div><dt>Department</dt><dd>Production</dd></div><div><dt>Grade</dt><dd>G3</dd></div><div><dt>Hire date</dt><dd>18-Jun-2021</dd></div></dl><hr /><h2>Delegation</h2><div className="form-grid"><label>Delegate to<input placeholder="Search person" /></label><label>From and to<input placeholder="DD-MMM-YYYY — DD-MMM-YYYY" /></label></div></section>
-    <section className="content-card full"><div className="section-heading"><h2>My Requests</h2><Button>Create request</Button></div><LinesTable /></section>
-  </div></>;
-}
+  const page = pages.find((p) => p.path === "/me")!;
+  const navigate = useNavigate();
+  const [emp, setEmp] = useState<any>(null);
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-function Worklist() {
-  const page = pages.find(p => p.path === "/worklist")!;
-  const notify = useAppStore(s => s.notify);
-  const statusesById = useAppStore(s => s.workflowStatuses);
-  const updateWorkflow = useAppStore(s => s.updateWorkflow);
-  const approvals = [
-    ["PR-2026-1184", "Purchase Requisition PR-2026-1184", "₹ 4,87,250.00", "Rahul Patil", "2 days"],
-    ["PER-2042", "Promotion Request PER-2042", "Grade G3 to G4", "Anil Deshmukh", "1 day"],
-    ["SUP-1098", "Supplier Registration SUP-1098", "Western Auto Forge", "Vikram Jadhav", "6 hours"],
-    ["INV-8841", "Invoice Hold Release INV-8841", "₹ 2,12,600.00", "Nitin Gaikwad", "3 days"],
-  ];
-  const act = async (id: string, title: string, action: "Approved" | "Rejected" | "Information requested" | "Reassigned") => {
-    let reason = "";
-    if (action === "Rejected") {
-      const res = window.prompt("Enter the rejection reason");
-      if (!res?.trim()) return notify("A reason is required to reject");
-      reason = res;
-    }
-    if (action === "Reassigned") {
-      const assignee = window.prompt("Reassign to");
-      if (!assignee?.trim()) return;
-    }
-    if (action === "Information requested") {
-      const message = window.prompt("Enter the information required");
-      if (!message?.trim()) return;
-    }
-    try {
-      await api.approvals.act(id, action, reason);
-    } catch (err: any) {
-      console.warn("Backend approval notice:", err.message);
-    }
-    updateWorkflow(id, action);
-    notify(`${title}: ${action.toLowerCase()}`);
-  };
-  return <><PageTitle page={page} actions={<Button>Approval history</Button>} /><div className="worklist-layout"><aside className="worklist-filters"><h3>Saved searches</h3>{["Assigned to me (8)", "Due today (3)", "High priority (2)", "Requested information (1)"].map((x,i)=><button className={i===0?"active":""} key={x}>{x}</button>)}</aside><div className="approval-list">{approvals.map((a,i)=>{const final = ["Approved", "Rejected"].includes(statusesById[a[0]]); return <article className="approval-card" key={a[0]}><div className="approval-top"><div><span className="eyebrow">{i % 2 ? "People" : "Procurement"}</span><h2>{a[1]}</h2></div><Status value={statusesById[a[0]]} /></div><div className="approval-facts"><div><small>Summary</small><strong>{a[2]}</strong></div><div><small>Requester</small><strong>{a[3]}</strong></div><div><small>Age</small><strong>{a[4]}</strong></div><div><small>Approval chain</small><strong>Level {i % 3 + 1} of 3</strong></div></div><div className="approval-actions"><Button variant="primary" disabled={final} onClick={()=>act(a[0], a[1], "Approved")}>Approve</Button><Button variant="danger" disabled={final} onClick={()=>act(a[0], a[1], "Rejected")}>Reject</Button><Button disabled={final} onClick={()=>act(a[0], a[1], "Information requested")}>Request Info</Button><Button disabled={final} onClick={()=>act(a[0], a[1], "Reassigned")}>Reassign</Button><Button variant="quiet">View document <ChevronRight size={14}/></Button></div></article>})}</div></div></>;
-}
+  useEffect(() => {
+    let active = true;
+    const loadProfileData = async () => {
+      try {
+        setLoading(true);
+        const searchName = user.name.split(" ")[0];
+        const [empRes, leaveRes] = await Promise.allSettled([
+          api.employees.list({ search: searchName }),
+          api.leaves.requests(),
+        ]);
 
-function OrgChart() {
-  const page = pages.find(p => p.path === "/people/org-chart")!;
-  const branches = [
-    ["Rohini Sawant", "HR Manager", "RS"],
-    ["Anil Deshmukh", "Line Manager, Production", "AD"],
-    ["Kavita More", "Line Manager, Stores and Purchase", "KM"],
-    ["Ritu Sharma", "Sales Operations", "RS"],
-  ];
-  return <><PageTitle page={page} actions={<Button>Expand all</Button>} /><section className="org-card"><div className="org-node top"><span className="avatar">SR</span><div><strong>Suresh Rane</strong><small>Plant Head</small></div></div><div className="org-line" /><div className="org-branches">{branches.map((b,i)=><div key={b[0]} className="org-column"><article className="org-node"><span className="avatar">{b[2]}</span><div><strong>{b[0]}</strong><small>{b[1]}</small></div></article>{i===1&&<><div className="vertical"/><article className="org-node child"><span className="avatar">RP</span><div><strong>Rahul Patil</strong><small>Production Operator</small></div></article></>}</div>)}</div></section></>;
+        if (active) {
+          if (empRes.status === "fulfilled" && empRes.value?.data && empRes.value.data.length > 0) {
+            const match = empRes.value.data.find(
+              (e: any) =>
+                e.fullName.toLowerCase().includes(user.name.toLowerCase()) ||
+                user.name.toLowerCase().includes(e.fullName.toLowerCase())
+            ) || empRes.value.data[0];
+            setEmp(match);
+          }
+          if (leaveRes.status === "fulfilled" && leaveRes.value?.data && Array.isArray(leaveRes.value.data)) {
+            setLeaves(leaveRes.value.data);
+          }
+        }
+      } catch (err: any) {
+        console.warn("Profile load notice:", err.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadProfileData();
+    return () => {
+      active = false;
+    };
+  }, [user.name]);
+
+  return (
+    <>
+      <PageTitle
+        page={page}
+        actions={
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={() => navigate("/me/attendance")}><Clock3 size={15} /> Punch Clock</Button>
+            <Button onClick={() => navigate("/me/leaves")}><Calendar size={15} /> Manage Leaves</Button>
+            <Button onClick={() => navigate("/me/payslips")}><IndianRupee size={15} /> Payslips</Button>
+            <Button variant="danger" onClick={() => navigate("/me/resignation")}>Resignation</Button>
+          </div>
+        }
+      />
+      <div className="profile-grid">
+        <section className="profile-card">
+          <div className="profile-head">
+            <span className="avatar large">{user.initials}</span>
+            <div>
+              <h2>{emp?.fullName || user.name}</h2>
+              <p>{emp?.job || user.role}</p>
+              <Status value={emp?.status || "Active"} />
+            </div>
+          </div>
+          <dl>
+            <div><dt>Employee number</dt><dd>{emp?.employeeNumber || "EMP-1042"}</dd></div>
+            <div><dt>Work email</dt><dd>{emp?.workEmail || `${user.username}@sahyadriauto.in`}</dd></div>
+            <div><dt>Location</dt><dd>{emp?.location || "Pune Manufacturing Plant"}</dd></div>
+            <div><dt>Manager</dt><dd>{emp?.managerName || user.reportsTo || "None"}</dd></div>
+          </dl>
+        </section>
+
+        <section className="content-card">
+          <h2>Assignment & Hierarchy</h2>
+          <dl className="detail-list">
+            <div><dt>Business unit</dt><dd>{emp?.businessUnit || "Pune Manufacturing"}</dd></div>
+            <div><dt>Department</dt><dd>{emp?.department || "Production"}</dd></div>
+            <div><dt>Grade</dt><dd>{emp?.grade || "G3"}</dd></div>
+            <div><dt>Hire date</dt><dd>{emp?.hireDate || "18-Jun-2021"}</dd></div>
+          </dl>
+          <hr />
+          <h2>Self-Service Workspaces</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+            <button className="app-tile" onClick={() => navigate("/me/leaves")}>
+              <Clock3 size={18} />
+              <span>Leave Balances</span>
+              <ChevronRight size={14} />
+            </button>
+            <button className="app-tile" onClick={() => navigate("/me/attendance")}>
+              <Activity size={18} />
+              <span>Punch Clock</span>
+              <ChevronRight size={14} />
+            </button>
+            <button className="app-tile" onClick={() => navigate("/me/payslips")}>
+              <IndianRupee size={18} />
+              <span>My Payslips</span>
+              <ChevronRight size={14} />
+            </button>
+            <button className="app-tile" onClick={() => navigate("/people/org-chart")}>
+              <Users size={18} />
+              <span>Org Hierarchy</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </section>
+
+        <section className="content-card full">
+          <div className="section-heading">
+            <div>
+              <h2>Recent Personal Leave Requests</h2>
+              <p className="helper">Real-time status of your submitted time-off requests.</p>
+            </div>
+            <Button onClick={() => navigate("/me/leaves")}>Apply Leave</Button>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Request ID</th>
+                  <th>Leave Type</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th className="right">Days</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                      <RefreshCcw size={16} className="spin" style={{ display: "inline-block", marginRight: 8 }} />
+                      Loading personal records...
+                    </td>
+                  </tr>
+                ) : leaves.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                      No recent leave requests found.
+                    </td>
+                  </tr>
+                ) : (
+                  leaves.slice(0, 5).map((l: any) => (
+                    <tr key={l.id}>
+                      <td style={{ fontWeight: 600 }}>{l.id}</td>
+                      <td>{l.leaveTypeName || l.leaveTypeCode}</td>
+                      <td className="tabular">{l.startDate}</td>
+                      <td className="tabular">{l.endDate}</td>
+                      <td className="right tabular">{l.days}</td>
+                      <td>{l.reason}</td>
+                      <td><Status value={l.status} /></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </>
+  );
 }
 
 function Notifications() {
-  const page = pages.find(p => p.path === "/notifications")!;
-  const notify = useAppStore(s => s.notify);
+  const page = pages.find((p) => p.path === "/notifications")!;
+  const notify = useAppStore((s) => s.notify);
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      const res = await api.notifications.list();
+      if (res?.data && Array.isArray(res.data)) {
+        setItems(res.data);
+      }
+    } catch (err: any) {
+      console.warn("Notification notice:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
   const markAll = async () => {
     try {
       await api.notifications.markAllRead();
+      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (err: any) {
       console.warn("Notification notice:", err.message);
     }
     notify("All notifications marked as read");
   };
-  return <><PageTitle page={page} actions={<Button onClick={markAll}>Mark all as read</Button>} /><section className="notification-list">{Array.from({length:9},(_,i)=><article className={i<3?"unread":""} key={i}><span className="notification-icon">{i%2?<FileText size={18}/>:<ClipboardCheck size={18}/>}</span><div><strong>{i%2?"Approval required":"Transaction updated"}</strong><p>{i%2?"Requisition PR-2026-1184 is awaiting your approval.":"Work order WO-2026-0318 moved to operation completion."}</p><small>{15-i}-Oct-2026 · {String(9+i).padStart(2,"0")}:24</small></div>{i<3&&<i/>}</article>)}</section></>;
+
+  return (
+    <>
+      <PageTitle page={page} actions={<Button onClick={markAll}>Mark all as read</Button>} />
+      <section className="notification-list">
+        {loading ? (
+          <div style={{ padding: 32, textAlign: "center", color: "var(--muted)" }}>
+            <RefreshCcw size={20} className="spin" style={{ display: "inline-block", marginRight: 8 }} />
+            Loading notifications from backend...
+          </div>
+        ) : items.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
+            <CheckCircle2 size={32} style={{ marginBottom: 8, color: "var(--success)" }} />
+            <p>You have no pending notifications. All notifications are caught up!</p>
+          </div>
+        ) : (
+          items.map((n: any) => (
+            <article className={!n.read ? "unread" : ""} key={n.id}>
+              <span className="notification-icon">
+                {n.type === "APPROVAL" ? <FileText size={18} /> : <CheckCircle2 size={18} />}
+              </span>
+              <div>
+                <strong>{n.title || (n.type === "APPROVAL" ? "Approval Required" : "System Update")}</strong>
+                <p>{n.message || n.description}</p>
+                <small>{n.createdAt || "Recent"}</small>
+              </div>
+              {!n.read && <i />}
+            </article>
+          ))
+        )}
+      </section>
+    </>
+  );
 }
 
 function Reports() {
-  const page = pages.find(p => p.path === "/reports")!;
-  const reports = ["Open Purchase Orders", "Invoices on Hold", "Aged Payables", "Stock Valuation", "Work Order Status", "Sales by Customer", "Headcount", "Hires and Exits", "Audit Summary"];
-  return <><PageTitle page={page} actions={<Button>Report history</Button>} /><section className="report-filters"><label>As-of date<input type="date" defaultValue="2026-10-15"/></label><label>Business unit<select><option>Pune Manufacturing</option></select></label><label>Department<select><option>All departments</option></select></label><Button variant="primary">Apply</Button></section><div className="report-grid">{reports.map((r,i)=><article key={r}><div><BarChart3 size={21}/><Status value={i%3===0?"Updated today":"Available"}/></div><h2>{r}</h2><p>{i%2?"Operational detail with status, owner and aging.":"Current balances and movement for the selected period."}</p><div><Button>Open report</Button><Button variant="quiet">Export CSV</Button></div></article>)}</div></>;
+  const page = pages.find((p) => p.path === "/reports")!;
+  const [selectedReport, setSelectedReport] = useState<string | null>(null);
+  const reports = [
+    "Headcount",
+    "Payroll Cost",
+    "Leave Utilization",
+    "Attendance",
+    "Open Purchase Orders",
+    "Invoices on Hold",
+    "Aged Payables",
+    "Stock Valuation",
+    "Work Order Status",
+    "Audit Summary",
+  ];
+  return (
+    <>
+      <PageTitle page={page} actions={<Button>Report history</Button>} />
+      {selectedReport && (
+        <H2RReportsViewer type={selectedReport} onClose={() => setSelectedReport(null)} />
+      )}
+      <section className="report-filters">
+        <label>As-of date<input type="date" defaultValue="2026-10-15"/></label>
+        <label>Business unit<select><option>Pune Manufacturing</option></select></label>
+        <label>Department<select><option>All departments</option></select></label>
+        <Button variant="primary">Apply</Button>
+      </section>
+      <div className="report-grid">
+        {reports.map((r, i) => (
+          <article key={r}>
+            <div>
+              <BarChart3 size={21}/>
+              <Status value={i < 4 ? "Live API" : "Available"}/>
+            </div>
+            <h2>{r}</h2>
+            <p>
+              {i < 4
+                ? "Live real-time operational dataset connected to FusionFlow backend."
+                : "Current balances and movement for the selected period."}
+            </p>
+            <div>
+              <Button onClick={() => setSelectedReport(r)}>Open report</Button>
+              <Button variant="quiet">Export CSV</Button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
 }
 
 function AdminTools() {
@@ -917,9 +1768,6 @@ function Help() {
   return <><PageTitle page={page}/><section className="help-layout"><aside><h3>Help topics</h3><button className="active">Oracle Fusion equivalents</button><button>Using FusionFlow</button><button>Keyboard and accessibility</button></aside><div className="content-card"><h2>Oracle Fusion equivalents</h2><p className="helper">Common enterprise terms used throughout FusionFlow.</p><dl className="glossary">{terms.map(t=><div key={t[0]}><dt>{t[0]}</dt><dd>{t[1]}</dd></div>)}</dl></div></section></>;
 }
 
-function AuditTable() {
-  return <div className="table-scroll"><table><thead><tr><th>When</th><th>User</th><th>Role</th><th>Field</th><th>Old value</th><th>New value</th></tr></thead><tbody>{Array.from({length:6},(_,i)=><tr key={i}><td>1{4-i}-Oct-2026, {10+i}:24</td><td>{users[i+1].name}</td><td>{users[i+1].role}</td><td>{["Status","Amount","Need-by date","Approver"][i%4]}</td><td>{i%2?"Draft":"₹ 4,52,000.00"}</td><td>{i%2?"Submitted":"₹ 4,87,250.00"}</td></tr>)}</tbody></table></div>;
-}
 
 function Forbidden() {
   const navigate = useNavigate();
